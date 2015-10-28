@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-// Pool Contains channels to instantiate pool
+// Pool Contains all information for the pool instance
 type Pool struct {
 	jobs       chan *Job
 	results    chan interface{}
@@ -15,32 +15,35 @@ type Pool struct {
 	cancelLock sync.RWMutex
 }
 
-// JobFunc ...
+// JobFunc is the consumable function/job you wish to run
 type JobFunc func(job *Job)
 
-// ... make this into sync.Pool
+// Job contains all information to run a job
 type Job struct {
 	fn     JobFunc
 	params []interface{}
 	pool   *Pool
 }
 
+// Params returns an array of the params that were passed in during the Queueing of the funciton
 func (j *Job) Params() []interface{} {
 	return j.params
 }
 
+// Cancel is a way to let the pool know, from a job, that it should cancel the rest of the
+// jobs to be run. The most likely scenario is because an error occured
 func (j *Job) Cancel() {
 	j.pool.Cancel()
 }
 
+// Return returns the jobs result
 func (j *Job) Return(result interface{}) {
 	j.pool.results <- result
 }
 
-// NewPool initializes pool
+// NewPool initializes and returns a new pool instance
 func NewPool(consumers int, jobs int) *Pool {
 
-	// make this a sync pool as well
 	p := &Pool{
 		wg:      new(sync.WaitGroup),
 		jobs:    make(chan *Job, jobs),
@@ -50,7 +53,6 @@ func NewPool(consumers int, jobs int) *Pool {
 
 	for i := 0; i < consumers; i++ {
 		go func(p *Pool) {
-			// defer fmt.Println("GOROUTINE DIE")
 			for {
 				select {
 				case j := <-p.jobs:
@@ -58,10 +60,8 @@ func NewPool(consumers int, jobs int) *Pool {
 						return
 					}
 					defer p.wg.Done()
-					// log.Println("Running")
 					j.fn(j)
 				case <-p.cancel:
-					// fmt.Println("Cancelling")
 					return
 				}
 			}
@@ -76,7 +76,7 @@ func (p *Pool) cancelJobs() {
 	}
 }
 
-// Queue ...
+// Queue adds a job to be processed and the params to be passed to it.
 func (p *Pool) Queue(fn JobFunc, params ...interface{}) {
 
 	p.cancelLock.Lock()
@@ -96,7 +96,8 @@ func (p *Pool) Queue(fn JobFunc, params ...interface{}) {
 	p.jobs <- job
 }
 
-// Cancel cancels all jobs not already running
+// Cancel cancels all jobs not already running.
+// It can also be called from within a job through the Job object
 func (p *Pool) Cancel() {
 	close(p.cancel)
 	p.cancelLock.Lock()
@@ -105,7 +106,7 @@ func (p *Pool) Cancel() {
 	p.cancelJobs()
 }
 
-// Results ...
+// Results returns the processed job results
 func (p *Pool) Results() <-chan interface{} {
 
 	close(p.jobs)
@@ -114,8 +115,6 @@ func (p *Pool) Results() <-chan interface{} {
 		p.wg.Wait()
 		close(p.results)
 	}()
-
-	// log.Println("Returning Results Channel")
 
 	return p.results
 }

@@ -1,8 +1,6 @@
 package pool
 
 import (
-	"fmt"
-	"log"
 	"os"
 	"testing"
 	"time"
@@ -30,34 +28,83 @@ func TestMain(m *testing.M) {
 	// teardown
 }
 
-func TestGoPool(t *testing.T) {
+func TestPool(t *testing.T) {
 
-	pool := NewPool(3, 10)
+	pool := NewPool(4, 4)
 
 	fn := func(job *Job) {
 
 		i := job.Params()[0].(int)
-		if i == 5 {
-			fmt.Println("function calling cancel")
-			job.Cancel()
-			return
-		}
-		log.Println("Executing Function: ", i)
 		time.Sleep(time.Second * 1)
 		job.Return(i)
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 4; i++ {
 		pool.Queue(fn, i)
 	}
 
 	var count int
 
-	for r := range pool.Results() {
+	for range pool.Results() {
 		count++
-		log.Println("Result :", r)
 	}
 
-	// Equal(t, count, 9)
-	Equal(t, true, true)
+	Equal(t, count, 4)
+}
+
+func TestCancel(t *testing.T) {
+
+	pool := NewPool(2, 4)
+
+	fn := func(job *Job) {
+
+		i := job.Params()[0].(int)
+		if i == 1 {
+			job.Cancel()
+			return
+		}
+		time.Sleep(time.Second * 1)
+		job.Return(i)
+	}
+
+	for i := 0; i < 4; i++ {
+		pool.Queue(fn, i)
+	}
+
+	var count int
+
+	for range pool.Results() {
+		count++
+	}
+
+	NotEqual(t, count, 4)
+}
+
+func TestCancelStillEnqueing(t *testing.T) {
+
+	pool := NewPool(2, 4)
+
+	fn := func(job *Job) {
+
+		i := job.Params()[0].(int)
+		if i == 1 {
+			job.Cancel()
+			return
+		}
+		time.Sleep(time.Second * 1)
+		job.Return(i)
+	}
+
+	for i := 0; i < 4; i++ {
+		time.Sleep(200 * time.Millisecond)
+		pool.Queue(fn, i)
+	}
+
+	var count int
+
+	for range pool.Results() {
+		count++
+	}
+
+	NotEqual(t, count, 4)
 }

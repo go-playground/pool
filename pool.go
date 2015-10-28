@@ -1,8 +1,6 @@
 package pool
 
 import (
-	"fmt"
-	"log"
 	"reflect"
 	"sync"
 )
@@ -38,6 +36,14 @@ func (j *Job) Cancel() {
 }
 
 func (j *Job) Return(result interface{}) {
+
+	j.pool.resultsLock.Lock()
+	defer j.pool.resultsLock.Unlock()
+
+	if j.pool.resultsClosed {
+		return
+	}
+
 	j.pool.results <- result
 }
 
@@ -63,11 +69,11 @@ func NewPool(consumers int, jobs int) *Pool {
 						return
 					}
 					defer p.wg.Done()
-					log.Println("Running")
+					// log.Println("Running")
 					j.fn(j)
 					// j.fn(p.results, p.cancel, c.param...)
 				case <-p.cancel:
-					fmt.Println("Cancelling")
+					// fmt.Println("Cancelling")
 					p.cancelJobs()
 					return
 				}
@@ -113,6 +119,13 @@ func (p *Pool) Queue(fn JobFunc, params ...interface{}) {
 		pool:   p,
 	}
 
+	p.jobsLock.Lock()
+	defer p.jobsLock.Unlock()
+
+	if p.jobsClosed {
+		return
+	}
+
 	p.wg.Add(1)
 	p.jobs <- job
 }
@@ -129,13 +142,13 @@ func (p *Pool) Results() <-chan interface{} {
 	p.closeJobsChannel()
 
 	go func() {
-		log.Println("Waiting for completion")
+		// log.Println("Waiting for completion")
 		p.wg.Wait()
-		fmt.Println("Closing WAIT FUNCTION!")
+		// fmt.Println("Closing WAIT FUNCTION!")
 		p.closeResultsChannel()
 	}()
 
-	log.Println("Returning Results Channel")
+	// log.Println("Returning Results Channel")
 
 	return p.results
 }

@@ -32,7 +32,7 @@ func TestMain(m *testing.M) {
 
 func TestGoPool(t *testing.T) {
 
-	pool := NewPool(3, 15)
+	pool := NewPool(3, 1000)
 
 	fn := func(job *Job) {
 
@@ -47,7 +47,7 @@ func TestGoPool(t *testing.T) {
 		job.Return(i)
 	}
 
-	for i := 0; i < 9; i++ {
+	for i := 0; i < 1000; i++ {
 		pool.Queue(fn, i)
 	}
 

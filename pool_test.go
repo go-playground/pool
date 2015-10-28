@@ -32,12 +32,12 @@ func TestMain(m *testing.M) {
 
 func TestGoPool(t *testing.T) {
 
-	pool := NewPool(3, 1000)
+	pool := NewPool(3, 10)
 
 	fn := func(job *Job) {
 
 		i := job.Params()[0].(int)
-		if i == 3 {
+		if i == 5 {
 			fmt.Println("function calling cancel")
 			job.Cancel()
 			return
@@ -47,7 +47,7 @@ func TestGoPool(t *testing.T) {
 		job.Return(i)
 	}
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 10; i++ {
 		pool.Queue(fn, i)
 	}
 

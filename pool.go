@@ -7,14 +7,12 @@ import (
 
 // Pool Contains channels to instantiate pool
 type Pool struct {
-	jobs          chan *Job
-	results       chan interface{}
-	cancel        chan struct{}
-	wg            *sync.WaitGroup
-	jobsClosed    bool
-	resultsClosed bool
-	jobsLock      sync.RWMutex
-	resultsLock   sync.RWMutex
+	jobs       chan *Job
+	results    chan interface{}
+	cancel     chan struct{}
+	wg         *sync.WaitGroup
+	cancelled  bool
+	cancelLock sync.RWMutex
 }
 
 // JobFunc ...
@@ -36,14 +34,6 @@ func (j *Job) Cancel() {
 }
 
 func (j *Job) Return(result interface{}) {
-
-	j.pool.resultsLock.Lock()
-	defer j.pool.resultsLock.Unlock()
-
-	if j.pool.resultsClosed {
-		return
-	}
-
 	j.pool.results <- result
 }
 
@@ -52,16 +42,15 @@ func NewPool(consumers int, jobs int) *Pool {
 
 	// make this a sync pool as well
 	p := &Pool{
-		wg:            new(sync.WaitGroup),
-		jobs:          make(chan *Job, jobs),
-		results:       make(chan interface{}, jobs),
-		cancel:        make(chan struct{}),
-		jobsClosed:    false,
-		resultsClosed: false,
+		wg:      new(sync.WaitGroup),
+		jobs:    make(chan *Job, jobs),
+		results: make(chan interface{}, jobs),
+		cancel:  make(chan struct{}),
 	}
 
 	for i := 0; i < consumers; i++ {
 		go func(p *Pool) {
+			// defer fmt.Println("GOROUTINE DIE")
 			for {
 				select {
 				case j := <-p.jobs:
@@ -71,10 +60,8 @@ func NewPool(consumers int, jobs int) *Pool {
 					defer p.wg.Done()
 					// log.Println("Running")
 					j.fn(j)
-					// j.fn(p.results, p.cancel, c.param...)
 				case <-p.cancel:
 					// fmt.Println("Cancelling")
-					p.cancelJobs()
 					return
 				}
 			}
@@ -87,43 +74,22 @@ func (p *Pool) cancelJobs() {
 	for range p.jobs {
 		p.wg.Done()
 	}
-
-	p.closeJobsChannel()
-	p.closeResultsChannel()
-}
-
-func (p *Pool) closeJobsChannel() {
-	p.jobsLock.Lock()
-	defer p.jobsLock.Unlock()
-	if !p.jobsClosed {
-		p.jobsClosed = true
-		close(p.jobs)
-	}
-}
-
-func (p *Pool) closeResultsChannel() {
-	p.resultsLock.Lock()
-	defer p.resultsLock.Unlock()
-	if !p.resultsClosed {
-		p.resultsClosed = true
-		close(p.results)
-	}
 }
 
 // Queue ...
 func (p *Pool) Queue(fn JobFunc, params ...interface{}) {
 
+	p.cancelLock.Lock()
+	defer p.cancelLock.Unlock()
+
+	if p.cancelled {
+		return
+	}
+
 	job := &Job{
 		fn:     fn,
 		params: params,
 		pool:   p,
-	}
-
-	p.jobsLock.Lock()
-	defer p.jobsLock.Unlock()
-
-	if p.jobsClosed {
-		return
 	}
 
 	p.wg.Add(1)
@@ -132,20 +98,21 @@ func (p *Pool) Queue(fn JobFunc, params ...interface{}) {
 
 // Cancel cancels all jobs not already running
 func (p *Pool) Cancel() {
-	p.cancel <- struct{}{}
+	close(p.cancel)
+	p.cancelLock.Lock()
+	p.cancelled = true
+	p.cancelLock.Unlock()
 	p.cancelJobs()
 }
 
 // Results ...
 func (p *Pool) Results() <-chan interface{} {
 
-	p.closeJobsChannel()
+	close(p.jobs)
 
 	go func() {
-		// log.Println("Waiting for completion")
 		p.wg.Wait()
-		// fmt.Println("Closing WAIT FUNCTION!")
-		p.closeResultsChannel()
+		close(p.results)
 	}()
 
 	// log.Println("Returning Results Channel")

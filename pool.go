@@ -1,8 +1,16 @@
 package pool
 
 import (
+	"errors"
+	"fmt"
+	"log"
 	"reflect"
+	"runtime"
 	"sync"
+)
+
+const (
+	errRecoveryString = "recovering from panic: %+v\nStack Trace:\n %s"
 )
 
 // Pool Contains all information for the pool instance
@@ -53,6 +61,17 @@ func NewPool(consumers int, jobs int) *Pool {
 
 	for i := 0; i < consumers; i++ {
 		go func(p *Pool) {
+			defer func(p *Pool) {
+				if err := recover(); err != nil {
+					trace := make([]byte, 1<<16)
+					n := runtime.Stack(trace, true)
+					err := errors.New(fmt.Sprintf(errRecoveryString, err, trace[:n]))
+					log.Println(err)
+					p.results <- err
+					p.Cancel()
+				}
+			}(p)
+
 			for {
 				select {
 				case j := <-p.jobs:

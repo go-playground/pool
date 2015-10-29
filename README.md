@@ -8,6 +8,7 @@ Library pool implements a consumer goroutine pool for easier goroutine handling.
 Features:
 
 -    Dead simple to use and makes no assumptions about how you will use it.
+-    Automatic recovery from consumer goroutines which returns an error to the results + automatically cancels the rest of the jobs.
 
 Installation
 ------------

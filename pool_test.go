@@ -108,3 +108,35 @@ func TestCancelStillEnqueing(t *testing.T) {
 
 	NotEqual(t, count, 4)
 }
+
+func TestPanicRecovery(t *testing.T) {
+
+	pool := NewPool(2, 4)
+
+	fn := func(job *Job) {
+
+		i := job.Params()[0].(int)
+		if i == 1 {
+			panic("OMG OMG OMG! something bad happened!")
+			return
+		}
+		time.Sleep(time.Second * 1)
+		job.Return(i)
+	}
+
+	for i := 0; i < 4; i++ {
+		time.Sleep(200 * time.Millisecond)
+		pool.Queue(fn, i)
+	}
+
+	var count int
+
+	for result := range pool.Results() {
+		_, ok := result.(error)
+		if ok {
+			count++
+		}
+	}
+
+	Equal(t, count, 1)
+}

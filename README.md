@@ -79,6 +79,14 @@ func main() {
 
 	for result := range p.Results() {
 
+		err, ok := result.(error)
+		if ok {
+			// there was some sort of panic that
+			// was recovered, in this scenario
+			fmt.Println(err)
+			return
+		}
+
 		res := result.(*resultStruct)
 
 		if res.err != nil {

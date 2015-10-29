@@ -71,3 +71,22 @@ func BenchmarkLargeCancel(b *testing.B) {
 	for range pool.Results() {
 	}
 }
+
+func BenchmarkOverconsumeLargeRun(b *testing.B) {
+
+	pool := NewPool(25, 100)
+
+	fn := func(job *Job) {
+
+		i := job.Params()[0].(int)
+		time.Sleep(time.Second * 1)
+		job.Return(i)
+	}
+
+	for i := 0; i < 100; i++ {
+		pool.Queue(fn, i)
+	}
+
+	for range pool.Results() {
+	}
+}

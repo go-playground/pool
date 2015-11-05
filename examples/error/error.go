@@ -33,8 +33,8 @@ func main() {
 
 	for result := range p.Results() {
 		switch result.(type) {
-		case error:
-			err := result.(error)
+		case *pool.ErrRecovery:
+			err := result.(*pool.ErrRecovery)
 			// do what you want with error or cancel the pool here p.Cancel()
 			fmt.Println(err)
 		default:

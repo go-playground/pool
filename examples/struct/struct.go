@@ -43,7 +43,7 @@ func main() {
 
 	for result := range p.Results() {
 
-		err, ok := result.(error)
+		err, ok := result.(*pool.ErrRecovery)
 		if ok {
 			// there was some sort of panic that
 			// was recovered, in this scenario

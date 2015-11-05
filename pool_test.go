@@ -132,9 +132,10 @@ func TestPanicRecovery(t *testing.T) {
 	var count int
 
 	for result := range pool.Results() {
-		_, ok := result.(error)
+		err, ok := result.(*ErrRecovery)
 		if ok {
 			count++
+			err.Error()
 		}
 	}
 

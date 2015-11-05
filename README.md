@@ -1,11 +1,11 @@
-Library pool
+Package pool
 ============
 
 [![Build Status](https://semaphoreci.com/api/v1/projects/a85ae32e-f437-40f1-9652-2525ec282658/593594/badge.svg)](https://semaphoreci.com/joeybloggs/pool)
 [![Coverage Status](https://coveralls.io/repos/go-playground/pool/badge.svg?branch=v1&service=github)](https://coveralls.io/github/go-playground/pool?branch=v1)
 [![GoDoc](https://godoc.org/gopkg.in/go-playground/pool.v1?status.svg)](https://godoc.org/gopkg.in/go-playground/pool.v1)
 
-Library pool implements a consumer goroutine pool for easier goroutine handling. 
+Package pool implements a consumer goroutine pool for easier goroutine handling. 
 
 Features:
 
@@ -81,7 +81,7 @@ func main() {
 
 	for result := range p.Results() {
 
-		err, ok := result.(error)
+		err, ok := result.(*pool.ErrRecovery)
 		if ok {
 			// there was some sort of panic that
 			// was recovered, in this scenario
@@ -139,8 +139,8 @@ func main() {
 
 	for result := range p.Results() {
 		switch result.(type) {
-		case error:
-			err := result.(error)
+		case *pool.ErrRecovery:
+			err := result.(*pool.ErrRecovery)
 			// do what you want with error or cancel the pool here p.Cancel()
 			fmt.Println(err)
 		default:
@@ -158,11 +158,10 @@ Benchmarks
 ```go
 $ go test -cpu=4 -bench=. -benchmem=true
 PASS
-BenchmarkSmallRun-4           	       1	3009120497 ns/op	    3360 B/op	      65 allocs/op
-BenchmarkSmallCancel-4        	       1	2003173598 ns/op	    3696 B/op	      81 allocs/op
-BenchmarkLargeCancel-4        	       1	2001222531 ns/op	  106784 B/op	    3028 allocs/op
-BenchmarkOverconsumeLargeRun-4	       1	4004509778 ns/op	   36528 B/op	     661 allocs/op
-ok  	github.com/joeybloggs/pool	14.230s
+BenchmarkSmallRun-4           	       1	3000201819 ns/op	    2272 B/op	      58 allocs/op
+BenchmarkSmallCancel-4        	       1	2002207036 ns/op	    2928 B/op	      79 allocs/op
+BenchmarkLargeCancel-4        	       1	2000774880 ns/op	  106656 B/op	    3026 allocs/op
+BenchmarkOverconsumeLargeRun-4	       1	4003364358 ns/op	   29872 B/op	     557 allocs/op
 ```
 To put these benchmarks in perspective:
 

@@ -1,9 +1,7 @@
 package pool
 
 import (
-	"errors"
 	"fmt"
-	"log"
 	"reflect"
 	"runtime"
 	"sync"
@@ -12,6 +10,14 @@ import (
 const (
 	errRecoveryString = "recovering from panic: %+v\nStack Trace:\n %s"
 )
+
+type ErrRecovery struct {
+	s string
+}
+
+func (e *ErrRecovery) Error() string {
+	return e.s
+}
 
 // Pool Contains all information for the pool instance
 type Pool struct {
@@ -65,10 +71,12 @@ func NewPool(consumers int, jobs int) *Pool {
 				if err := recover(); err != nil {
 					trace := make([]byte, 1<<16)
 					n := runtime.Stack(trace, true)
-					err := errors.New(fmt.Sprintf(errRecoveryString, err, trace[:n]))
-					log.Println(err)
-					p.results <- err
+					rerr := &ErrRecovery{
+						s: fmt.Sprintf(errRecoveryString, err, trace[:n]),
+					}
+					p.results <- rerr
 					p.Cancel()
+					p.wg.Done()
 				}
 			}(p)
 
@@ -78,8 +86,9 @@ func NewPool(consumers int, jobs int) *Pool {
 					if reflect.ValueOf(j).IsNil() {
 						return
 					}
-					defer p.wg.Done()
+
 					j.fn(j)
+					p.wg.Done()
 				case <-p.cancel:
 					return
 				}

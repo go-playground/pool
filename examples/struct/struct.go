@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/joeybloggs/pool"
+	"gopkg.in/go-playground/pool.v1"
 )
 
 type resultStruct struct {

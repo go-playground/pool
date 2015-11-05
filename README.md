@@ -1,7 +1,7 @@
 Library pool
 ============
 
-[![GoDoc](https://godoc.org/github.com/joeybloggs/pool?status.svg)](https://godoc.org/github.com/joeybloggs/pool)
+[![GoDoc](https://godoc.org/gopkg.in/go-playground/pool.v1?status.svg)](https://godoc.org/gopkg.in/go-playground/pool.v1)
 
 Library pool implements a consumer goroutine pool for easier goroutine handling. 
 
@@ -15,20 +15,20 @@ Installation
 
 Use go get.
 
-	go get github.com/joeybloggs/pool
+	go get gopkg.in/go-playground/pool.v1
 
 or to update
 
-	go get -u github.com/joeybloggs/pool
+	go get -u gopkg.in/go-playground/pool.v1
 
 Then import the validator package into your own code.
 
-	import "github.com/joeybloggs/pool"
+	import "gopkg.in/go-playground/pool.v1"
 
 Usage and documentation
 ------
 
-Please see http://godoc.org/github.com/joeybloggs/pool for detailed usage docs.
+Please see http://godoc.org/gopkg.in/go-playground/pool.v1 for detailed usage docs.
 
 ##### Examples:
 
@@ -41,7 +41,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/joeybloggs/pool"
+	"gopkg.in/go-playground/pool.v1"
 )
 
 type resultStruct struct {
@@ -109,7 +109,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/joeybloggs/pool"
+	"gopkg.in/go-playground/pool.v1"
 )
 
 func main() {

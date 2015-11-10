@@ -118,7 +118,6 @@ func TestPanicRecovery(t *testing.T) {
 		i := job.Params()[0].(int)
 		if i == 1 {
 			panic("OMG OMG OMG! something bad happened!")
-			return
 		}
 		time.Sleep(time.Second * 1)
 		job.Return(i)
@@ -135,7 +134,7 @@ func TestPanicRecovery(t *testing.T) {
 		err, ok := result.(*ErrRecovery)
 		if ok {
 			count++
-			err.Error()
+			NotEqual(t, len(err.Error()), 0)
 		}
 	}
 

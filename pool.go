@@ -11,10 +11,12 @@ const (
 	errRecoveryString = "recovering from panic: %+v\nStack Trace:\n %s"
 )
 
+// ErrRecovery contains the error when a consumer goroutine needed to be recovers
 type ErrRecovery struct {
 	s string
 }
 
+// Error prints recovery error
 func (e *ErrRecovery) Error() string {
 	return e.s
 }

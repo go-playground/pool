@@ -1,11 +1,11 @@
-Library pool
+Package pool
 ============
 
 [![Build Status](https://semaphoreci.com/api/v1/projects/a85ae32e-f437-40f1-9652-2525ec282658/593594/badge.svg)](https://semaphoreci.com/joeybloggs/pool)
 [![Coverage Status](https://coveralls.io/repos/go-playground/pool/badge.svg?branch=v1&service=github)](https://coveralls.io/github/go-playground/pool?branch=v1)
 [![GoDoc](https://godoc.org/gopkg.in/go-playground/pool.v1?status.svg)](https://godoc.org/gopkg.in/go-playground/pool.v1)
 
-Library pool implements a consumer goroutine pool for easier goroutine handling. 
+Package pool implements a consumer goroutine pool for easier goroutine handling. 
 
 Features:
 

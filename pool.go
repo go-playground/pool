@@ -11,6 +11,12 @@ const (
 	errRecoveryString = "recovering from panic: %+v\nStack Trace:\n %s"
 )
 
+// ConsumerHook type is a function that is called during the consumer startup
+// and the return value is added to each Job just prior to firing off the job.
+// This is good for say creating a database connection for every job to use but
+// not having more than there are consumers.
+type ConsumerHook func() interface{}
+
 // ErrRecovery contains the error when a consumer goroutine needed to be recovers
 type ErrRecovery struct {
 	s string
@@ -23,12 +29,13 @@ func (e *ErrRecovery) Error() string {
 
 // Pool Contains all information for the pool instance
 type Pool struct {
-	jobs       chan *Job
-	results    chan interface{}
-	cancel     chan struct{}
-	wg         *sync.WaitGroup
-	cancelled  bool
-	cancelLock sync.RWMutex
+	jobs         chan *Job
+	results      chan interface{}
+	cancel       chan struct{}
+	wg           *sync.WaitGroup
+	cancelled    bool
+	cancelLock   sync.RWMutex
+	consumerHook ConsumerHook
 }
 
 // JobFunc is the consumable function/job you wish to run
@@ -36,9 +43,16 @@ type JobFunc func(job *Job)
 
 // Job contains all information to run a job
 type Job struct {
-	fn     JobFunc
-	params []interface{}
-	pool   *Pool
+	fn        JobFunc
+	params    []interface{}
+	hookParam interface{}
+	pool      *Pool
+}
+
+// HookParam returns the value, if any, set by the ConsumerHook.
+// Example a database connection.
+func (j *Job) HookParam() interface{} {
+	return j.hookParam
 }
 
 // Params returns an array of the params that were passed in during the Queueing of the funciton
@@ -82,6 +96,12 @@ func NewPool(consumers int, jobs int) *Pool {
 				}
 			}(p)
 
+			var consumerParm interface{}
+
+			if p.consumerHook != nil {
+				consumerParm = p.consumerHook()
+			}
+
 			for {
 				select {
 				case j := <-p.jobs:
@@ -89,6 +109,7 @@ func NewPool(consumers int, jobs int) *Pool {
 						return
 					}
 
+					j.hookParam = consumerParm
 					j.fn(j)
 					p.wg.Done()
 				case <-p.cancel:
@@ -98,6 +119,13 @@ func NewPool(consumers int, jobs int) *Pool {
 		}(p)
 	}
 	return p
+}
+
+// AddConsumerHook registers a Consumer Hook function to be called by every consumer
+// and setting the return value on every job prior to running. Use case is for
+// reusing database connections.
+func (p *Pool) AddConsumerHook(fn ConsumerHook) {
+	p.consumerHook = fn
 }
 
 func (p *Pool) cancelJobs() {

@@ -52,6 +52,34 @@ func TestPool(t *testing.T) {
 	Equal(t, count, 4)
 }
 
+func TestConsumerHook(t *testing.T) {
+
+	pool := NewPool(4, 4)
+	pool.AddConsumerHook(func() interface{} { return 1 })
+
+	fn := func(job *Job) {
+
+		j := job.HookParam().(int)
+		job.Return(j)
+	}
+
+	for i := 0; i < 4; i++ {
+		pool.Queue(fn)
+	}
+
+	var count int
+
+	for v := range pool.Results() {
+		count++
+
+		val, ok := v.(int)
+		Equal(t, ok, true)
+		Equal(t, val, 1)
+	}
+
+	Equal(t, count, 4)
+}
+
 func TestCancel(t *testing.T) {
 
 	pool := NewPool(2, 4)

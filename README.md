@@ -54,6 +54,10 @@ type resultStruct struct {
 func main() {
 	p := pool.NewPool(4, 16)
 
+	// can add a consumer hook for each consumer routine to get a value from
+	// such as a database connection which each job can reuse via job.HookParam()
+	// p.AddConsumerHook(func() interface{}{ return db connection or whatever})
+	
 	fn := func(job *pool.Job) {
 
 		i := job.Params()[0].(int)
@@ -116,6 +120,10 @@ import (
 
 func main() {
 	p := pool.NewPool(4, 16)
+
+	// can add a consumer hook for each consumer routine to get a value from
+	// such as a database connection which each job can reuse via job.HookParam()
+	// p.AddConsumerHook(func() interface{}{ return db connection or whatever})
 
 	fn := func(job *pool.Job) {
 

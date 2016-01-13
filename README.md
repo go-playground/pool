@@ -23,7 +23,7 @@ or to update
 
 	go get -u gopkg.in/go-playground/pool.v1
 
-Then import the validator package into your own code.
+Then import the pool package into your own code.
 
 	import "gopkg.in/go-playground/pool.v1"
 

@@ -36,6 +36,8 @@ type Pool struct {
 	cancelled    bool
 	cancelLock   sync.RWMutex
 	consumerHook ConsumerHook
+	once         sync.Once
+	consumers    int
 }
 
 // JobFunc is the consumable function/job you wish to run
@@ -75,49 +77,13 @@ func (j *Job) Return(result interface{}) {
 func NewPool(consumers int, jobs int) *Pool {
 
 	p := &Pool{
-		wg:      new(sync.WaitGroup),
-		jobs:    make(chan *Job, jobs),
-		results: make(chan interface{}, jobs),
-		cancel:  make(chan struct{}),
+		wg:        new(sync.WaitGroup),
+		jobs:      make(chan *Job, jobs),
+		results:   make(chan interface{}, jobs),
+		cancel:    make(chan struct{}),
+		consumers: consumers,
 	}
 
-	for i := 0; i < consumers; i++ {
-		go func(p *Pool) {
-			defer func(p *Pool) {
-				if err := recover(); err != nil {
-					trace := make([]byte, 1<<16)
-					n := runtime.Stack(trace, true)
-					rerr := &ErrRecovery{
-						s: fmt.Sprintf(errRecoveryString, err, trace[:n]),
-					}
-					p.results <- rerr
-					p.Cancel()
-					p.wg.Done()
-				}
-			}(p)
-
-			var consumerParm interface{}
-
-			if p.consumerHook != nil {
-				consumerParm = p.consumerHook()
-			}
-
-			for {
-				select {
-				case j := <-p.jobs:
-					if reflect.ValueOf(j).IsNil() {
-						return
-					}
-
-					j.hookParam = consumerParm
-					j.fn(j)
-					p.wg.Done()
-				case <-p.cancel:
-					return
-				}
-			}
-		}(p)
-	}
 	return p
 }
 
@@ -137,6 +103,46 @@ func (p *Pool) cancelJobs() {
 // Queue adds a job to be processed and the params to be passed to it.
 func (p *Pool) Queue(fn JobFunc, params ...interface{}) {
 
+	p.once.Do(func() {
+		for i := 0; i < p.consumers; i++ {
+			go func(p *Pool) {
+				defer func(p *Pool) {
+					if err := recover(); err != nil {
+						trace := make([]byte, 1<<16)
+						n := runtime.Stack(trace, true)
+						rerr := &ErrRecovery{
+							s: fmt.Sprintf(errRecoveryString, err, trace[:n]),
+						}
+						p.results <- rerr
+						p.Cancel()
+						p.wg.Done()
+					}
+				}(p)
+
+				var consumerParm interface{}
+
+				if p.consumerHook != nil {
+					consumerParm = p.consumerHook()
+				}
+
+				for {
+					select {
+					case j := <-p.jobs:
+						if reflect.ValueOf(j).IsNil() {
+							return
+						}
+
+						j.hookParam = consumerParm
+						j.fn(j)
+						p.wg.Done()
+					case <-p.cancel:
+						return
+					}
+				}
+			}(p)
+		}
+	})
+
 	p.cancelLock.Lock()
 	defer p.cancelLock.Unlock()
 
@@ -152,6 +158,7 @@ func (p *Pool) Queue(fn JobFunc, params ...interface{}) {
 
 	p.wg.Add(1)
 	p.jobs <- job
+
 }
 
 // Cancel cancels all jobs not already running.

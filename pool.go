@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 	"runtime"
-	"sync/atomic"
+	"sync"
 )
 
 const (
@@ -62,7 +62,8 @@ type consumableWork struct {
 type Pool struct {
 	work   chan consumableWork
 	cancel chan struct{}
-	closed atomic.Value
+	closed bool
+	m      *sync.RWMutex
 }
 
 // New returns a new pool instance.
@@ -75,6 +76,7 @@ func New(workers uint) *Pool {
 	p := &Pool{
 		work:   make(chan consumableWork, workers*2),
 		cancel: make(chan struct{}),
+		m:      new(sync.RWMutex),
 	}
 
 	// fire up workers here
@@ -104,6 +106,8 @@ func New(workers uint) *Pool {
 				select {
 				case cw = <-p.work:
 
+					// possible for one more nilled out value to make it
+					// through when channel closed, don't quite understad the why
 					if cw.fn == nil {
 						continue
 					}
@@ -113,9 +117,9 @@ func New(workers uint) *Pool {
 					// who knows where the Done channel is being listened to on the other end
 					// don't want this to block just because caller is waiting on another unit
 					// of work to be done first.
-					go func() {
+					go func(cw consumableWork) {
 						cw.wu.Done <- struct{}{}
-					}()
+					}(cw)
 				case <-p.cancel:
 					return
 				}
@@ -134,19 +138,32 @@ func (p *Pool) Queue(fn WorkFunc) *WorkUnit {
 		Done: make(chan struct{}),
 	}
 
-	if p.closed.Load() != nil {
+	// p.m.RLock()
+	// if p.closed == true {
 
-		go func() {
-			w.Error = &WorkUnitCloseError{s: errWorkUnitClosed}
-			w.Done <- struct{}{}
-		}()
+	// 	fmt.Println("Closed")
+	// 	go func() {
+	// 		w.Error = &WorkUnitCloseError{s: errWorkUnitClosed}
+	// 		w.Done <- struct{}{}
+	// 	}()
 
-		return w
-	}
+	// 	p.m.RUnlock()
+	// 	return w
+	// }
 
 	go func() {
+		p.m.RLock()
+		if p.closed {
+			w.Error = &WorkUnitCloseError{s: errWorkUnitClosed}
+			w.Done <- struct{}{}
+			return
+		}
+		p.m.RUnlock()
+
 		p.work <- consumableWork{fn: fn, wu: w}
 	}()
+
+	// p.m.RUnlock()
 
 	return w
 }
@@ -154,6 +171,14 @@ func (p *Pool) Queue(fn WorkFunc) *WorkUnit {
 func (p *Pool) cancelWithError(err error) {
 
 	close(p.cancel)
+
+	p.m.Lock()
+	p.closed = true
+	p.m.Unlock()
+
+	// fmt.Println(p.closed.Load() != nil)
+
+	close(p.work)
 
 	for cw := range p.work {
 		go func(cw consumableWork) {
@@ -173,7 +198,10 @@ func (p *Pool) Cancel() {
 func (p *Pool) Close() {
 	close(p.cancel)
 
-	p.closed.Store(struct{}{})
+	// p.closed.Store(struct{}{})
+	p.m.Lock()
+	p.closed = true
+	p.m.Unlock()
 	close(p.work)
 
 	err := &WorkUnitCloseError{s: errWorkUnitClosed}

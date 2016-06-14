@@ -18,18 +18,23 @@ func BenchmarkSmallRun(b *testing.B) {
 
 	fn := func() (interface{}, error) {
 		time.Sleep(time.Second * 1)
-		return nil, nil
+		return 1, nil
 	}
+
+	// b.ReportAllocs()
 
 	for i := 0; i < 10; i++ {
 		res = append(res, pool.Queue(fn))
+		// if i == 2 {
+		// 	pool.Cancel()
+		// }
 	}
 
 	var count int
 
 	for _, cw := range res {
 		<-cw.Done
-		count++
+		count += cw.Value.(int)
 	}
 
 	if count != 10 {

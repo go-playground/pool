@@ -5,88 +5,101 @@ import (
 	"time"
 )
 
+// import (
+// 	"testing"
+// 	"time"
+// )
+
 func BenchmarkSmallRun(b *testing.B) {
 
-	pool := NewPool(4, 10)
+	var res []*WorkUnit
+	pool := New(10)
+	defer pool.Close()
 
-	fn := func(job *Job) {
-
-		i := job.Params()[0].(int)
+	fn := func() (interface{}, error) {
 		time.Sleep(time.Second * 1)
-		job.Return(i)
+		return nil, nil
 	}
 
 	for i := 0; i < 10; i++ {
-		pool.Queue(fn, i)
+		res = append(res, pool.Queue(fn))
 	}
 
-	for range pool.Results() {
-	}
-}
+	var count int
 
-func BenchmarkSmallCancel(b *testing.B) {
-
-	pool := NewPool(4, 20)
-
-	fn := func(job *Job) {
-
-		i := job.Params()[0].(int)
-		if i == 6 {
-			job.Cancel()
-			return
-		}
-
-		time.Sleep(time.Second * 1)
-		job.Return(i)
+	for _, cw := range res {
+		<-cw.Done
+		count++
 	}
 
-	for i := 0; i < 20; i++ {
-		pool.Queue(fn, i)
-	}
-
-	for range pool.Results() {
+	if count != 10 {
+		b.Fatal("Count Incorrect")
 	}
 }
 
-func BenchmarkLargeCancel(b *testing.B) {
+// func BenchmarkSmallCancel(b *testing.B) {
 
-	pool := NewPool(4, 1000)
+// 	pool := NewPool(4, 20)
 
-	fn := func(job *Job) {
+// 	fn := func(job *Job) {
 
-		i := job.Params()[0].(int)
-		if i == 6 {
-			job.Cancel()
-			return
-		}
+// 		i := job.Params()[0].(int)
+// 		if i == 6 {
+// 			job.Cancel()
+// 			return
+// 		}
 
-		time.Sleep(time.Second * 1)
-		job.Return(i)
-	}
+// 		time.Sleep(time.Second * 1)
+// 		job.Return(i)
+// 	}
 
-	for i := 0; i < 1000; i++ {
-		pool.Queue(fn, i)
-	}
+// 	for i := 0; i < 20; i++ {
+// 		pool.Queue(fn, i)
+// 	}
 
-	for range pool.Results() {
-	}
-}
+// 	for range pool.Results() {
+// 	}
+// }
 
-func BenchmarkOverconsumeLargeRun(b *testing.B) {
+// func BenchmarkLargeCancel(b *testing.B) {
 
-	pool := NewPool(25, 100)
+// 	pool := NewPool(4, 1000)
 
-	fn := func(job *Job) {
+// 	fn := func(job *Job) {
 
-		i := job.Params()[0].(int)
-		time.Sleep(time.Second * 1)
-		job.Return(i)
-	}
+// 		i := job.Params()[0].(int)
+// 		if i == 6 {
+// 			job.Cancel()
+// 			return
+// 		}
 
-	for i := 0; i < 100; i++ {
-		pool.Queue(fn, i)
-	}
+// 		time.Sleep(time.Second * 1)
+// 		job.Return(i)
+// 	}
 
-	for range pool.Results() {
-	}
-}
+// 	for i := 0; i < 1000; i++ {
+// 		pool.Queue(fn, i)
+// 	}
+
+// 	for range pool.Results() {
+// 	}
+// }
+
+// func BenchmarkOverconsumeLargeRun(b *testing.B) {
+
+// 	pool := NewPool(25, 100)
+
+// 	fn := func(job *Job) {
+
+// 		i := job.Params()[0].(int)
+// 		time.Sleep(time.Second * 1)
+// 		job.Return(i)
+// 	}
+
+// 	for i := 0; i < 100; i++ {
+// 		pool.Queue(fn, i)
+// 	}
+
+// 	for range pool.Results() {
+// 	}
+// }

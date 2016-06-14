@@ -1,12 +1,13 @@
 package pool
 
 import (
-	"os"
 	"testing"
 	"time"
 
 	. "gopkg.in/go-playground/assert.v1"
 )
+
+// import . "gopkg.in/go-playground/assert.v1"
 
 // NOTES:
 // - Run "go test" to run tests
@@ -19,152 +20,168 @@ import (
 // go test -coverprofile cover.out && go tool cover -html=cover.out -o cover.html
 //
 
-func TestMain(m *testing.M) {
+// func TestMain(m *testing.M) {
 
-	// setup
+// 	// setup
 
-	os.Exit(m.Run())
+// 	os.Exit(m.Run())
 
-	// teardown
-}
+// 	// teardown
+// }
 
 func TestPool(t *testing.T) {
 
-	pool := NewPool(4, 4)
+	var res []*WorkUnit
 
-	fn := func(job *Job) {
+	pool := New(4)
+	defer pool.Close()
 
-		i := job.Params()[0].(int)
-		time.Sleep(time.Second * 1)
-		job.Return(i)
+	newFunc := func(d time.Duration) WorkFunc {
+		return func() (interface{}, error) {
+			time.Sleep(d)
+			return nil, nil
+		}
 	}
 
+	// pool := NewPool(4, 4)
+
+	// fn := func(job *Job) {
+
+	// 	i := job.Params()[0].(int)
+	// 	time.Sleep(time.Second * 1)
+	// 	job.Return(i)
+	// }
+
 	for i := 0; i < 4; i++ {
-		pool.Queue(fn, i)
+		wu := pool.Queue(newFunc(time.Second * 1))
+		res = append(res, wu)
 	}
 
 	var count int
 
-	for range pool.Results() {
+	for _, wu := range res {
+		<-wu.Done
+		Equal(t, wu.Error, nil)
+		Equal(t, wu.Value, nil)
 		count++
 	}
 
 	Equal(t, count, 4)
 }
 
-func TestConsumerHook(t *testing.T) {
+// func TestConsumerHook(t *testing.T) {
 
-	pool := NewPool(4, 4)
-	pool.AddConsumerHook(func() interface{} { return 1 })
+// 	pool := NewPool(4, 4)
+// 	pool.AddConsumerHook(func() interface{} { return 1 })
 
-	fn := func(job *Job) {
+// 	fn := func(job *Job) {
 
-		j := job.HookParam().(int)
-		job.Return(j)
-	}
+// 		j := job.HookParam().(int)
+// 		job.Return(j)
+// 	}
 
-	for i := 0; i < 4; i++ {
-		pool.Queue(fn)
-	}
+// 	for i := 0; i < 4; i++ {
+// 		pool.Queue(fn)
+// 	}
 
-	var count int
+// 	var count int
 
-	for v := range pool.Results() {
-		count++
+// 	for v := range pool.Results() {
+// 		count++
 
-		val, ok := v.(int)
-		Equal(t, ok, true)
-		Equal(t, val, 1)
-	}
+// 		val, ok := v.(int)
+// 		Equal(t, ok, true)
+// 		Equal(t, val, 1)
+// 	}
 
-	Equal(t, count, 4)
-}
+// 	Equal(t, count, 4)
+// }
 
-func TestCancel(t *testing.T) {
+// func TestCancel(t *testing.T) {
 
-	pool := NewPool(2, 4)
+// 	pool := NewPool(2, 4)
 
-	fn := func(job *Job) {
+// 	fn := func(job *Job) {
 
-		i := job.Params()[0].(int)
-		if i == 1 {
-			job.Cancel()
-			return
-		}
-		time.Sleep(time.Second * 1)
-		job.Return(i)
-	}
+// 		i := job.Params()[0].(int)
+// 		if i == 1 {
+// 			job.Cancel()
+// 			return
+// 		}
+// 		time.Sleep(time.Second * 1)
+// 		job.Return(i)
+// 	}
 
-	for i := 0; i < 4; i++ {
-		pool.Queue(fn, i)
-	}
+// 	for i := 0; i < 4; i++ {
+// 		pool.Queue(fn, i)
+// 	}
 
-	var count int
+// 	var count int
 
-	for range pool.Results() {
-		count++
-	}
+// 	for range pool.Results() {
+// 		count++
+// 	}
 
-	NotEqual(t, count, 4)
-}
+// 	NotEqual(t, count, 4)
+// }
 
-func TestCancelStillEnqueing(t *testing.T) {
+// func TestCancelStillEnqueing(t *testing.T) {
 
-	pool := NewPool(2, 4)
+// 	pool := NewPool(2, 4)
 
-	fn := func(job *Job) {
+// 	fn := func(job *Job) {
 
-		i := job.Params()[0].(int)
-		if i == 1 {
-			job.Cancel()
-			return
-		}
-		time.Sleep(time.Second * 1)
-		job.Return(i)
-	}
+// 		i := job.Params()[0].(int)
+// 		if i == 1 {
+// 			job.Cancel()
+// 			return
+// 		}
+// 		time.Sleep(time.Second * 1)
+// 		job.Return(i)
+// 	}
 
-	for i := 0; i < 4; i++ {
-		time.Sleep(200 * time.Millisecond)
-		pool.Queue(fn, i)
-	}
+// 	for i := 0; i < 4; i++ {
+// 		time.Sleep(200 * time.Millisecond)
+// 		pool.Queue(fn, i)
+// 	}
 
-	var count int
+// 	var count int
 
-	for range pool.Results() {
-		count++
-	}
+// 	for range pool.Results() {
+// 		count++
+// 	}
 
-	NotEqual(t, count, 4)
-}
+// 	NotEqual(t, count, 4)
+// }
 
-func TestPanicRecovery(t *testing.T) {
+// func TestPanicRecovery(t *testing.T) {
 
-	pool := NewPool(2, 4)
+// 	pool := NewPool(2, 4)
 
-	fn := func(job *Job) {
+// 	fn := func(job *Job) {
 
-		i := job.Params()[0].(int)
-		if i == 1 {
-			panic("OMG OMG OMG! something bad happened!")
-		}
-		time.Sleep(time.Second * 1)
-		job.Return(i)
-	}
+// 		i := job.Params()[0].(int)
+// 		if i == 1 {
+// 			panic("OMG OMG OMG! something bad happened!")
+// 		}
+// 		time.Sleep(time.Second * 1)
+// 		job.Return(i)
+// 	}
 
-	for i := 0; i < 4; i++ {
-		time.Sleep(200 * time.Millisecond)
-		pool.Queue(fn, i)
-	}
+// 	for i := 0; i < 4; i++ {
+// 		time.Sleep(200 * time.Millisecond)
+// 		pool.Queue(fn, i)
+// 	}
 
-	var count int
+// 	var count int
 
-	for result := range pool.Results() {
-		err, ok := result.(*ErrRecovery)
-		if ok {
-			count++
-			NotEqual(t, len(err.Error()), 0)
-		}
-	}
+// 	for result := range pool.Results() {
+// 		err, ok := result.(*ErrRecovery)
+// 		if ok {
+// 			count++
+// 			NotEqual(t, len(err.Error()), 0)
+// 		}
+// 	}
 
-	Equal(t, count, 1)
-}
+// 	Equal(t, count, 1)
+// }

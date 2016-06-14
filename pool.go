@@ -2,184 +2,186 @@ package pool
 
 import (
 	"fmt"
-	"reflect"
+	"log"
 	"runtime"
-	"sync"
+	"sync/atomic"
 )
 
 const (
-	errRecoveryString = "recovering from panic: %+v\nStack Trace:\n %s"
+	errWorkCancelled         = "Work Cancelled"
+	errWorkCancelledRecovery = "Work Cancelled due to Work Unit Error, Stack Trace:\n %s"
+	errWorkUnitClosed        = "Pool has been closed, work not run."
 )
 
-// ConsumerHook type is a function that is called during the consumer startup
-// and the return value is added to each Job just prior to firing off the job.
-// This is good for say creating a database connection for every job to use but
-// not having more than there are consumers.
-type ConsumerHook func() interface{}
-
-// ErrRecovery contains the error when a consumer goroutine needed to be recovers
-type ErrRecovery struct {
+// WorkUnitCloseError is the error returned to all work units that may have been in or added to the pool after it's closing.
+type WorkUnitCloseError struct {
 	s string
 }
 
-// Error prints recovery error
-func (e *ErrRecovery) Error() string {
-	return e.s
+// Error prints Work Unit Close error
+func (wuc *WorkUnitCloseError) Error() string {
+	return wuc.s
 }
 
-// Pool Contains all information for the pool instance
+// WorkUnitCancelledErr is the error returned to all work units when a pool is cancelled.
+type WorkUnitCancelledErr struct {
+	s string
+}
+
+// Error prints Work Unit Cancelation error
+func (wuc *WorkUnitCancelledErr) Error() string {
+	return wuc.s
+}
+
+// WorkUnitCancelledRecoveryErr is the error returned to all work units when a pool is cancelled becaue of an recovery error.
+type WorkUnitCancelledRecoveryErr struct {
+	s string
+}
+
+// Error prints Work Unit Cancelation error that cause the worker to recover
+func (wuc *WorkUnitCancelledRecoveryErr) Error() string {
+	return wuc.s
+}
+
+// WorkUnit contains a single unit of works values
+type WorkUnit struct {
+	Value interface{}
+	Error error
+	Done  chan struct{}
+}
+
+// WorkFunc is the function type needed by the pool
+type WorkFunc func() (interface{}, error)
+
+type consumableWork struct {
+	fn WorkFunc
+	wu *WorkUnit
+}
+
+// Pool in the main pool instance.
 type Pool struct {
-	jobs         chan *Job
-	results      chan interface{}
-	cancel       chan struct{}
-	wg           *sync.WaitGroup
-	cancelled    bool
-	cancelLock   sync.RWMutex
-	consumerHook ConsumerHook
-	once         sync.Once
-	consumers    int
+	work   chan consumableWork
+	cancel chan struct{}
+	closed atomic.Value
 }
 
-// JobFunc is the consumable function/job you wish to run
-type JobFunc func(job *Job)
+// New returns a new pool instance.
+func New(workers uint) *Pool {
 
-// Job contains all information to run a job
-type Job struct {
-	fn        JobFunc
-	params    []interface{}
-	hookParam interface{}
-	pool      *Pool
-}
-
-// HookParam returns the value, if any, set by the ConsumerHook.
-// Example a database connection.
-func (j *Job) HookParam() interface{} {
-	return j.hookParam
-}
-
-// Params returns an array of the params that were passed in during the Queueing of the funciton
-func (j *Job) Params() []interface{} {
-	return j.params
-}
-
-// Cancel is a way to let the pool know, from a job, that it should cancel the rest of the
-// jobs to be run. The most likely scenario is because an error occured
-func (j *Job) Cancel() {
-	j.pool.Cancel()
-}
-
-// Return returns the jobs result
-func (j *Job) Return(result interface{}) {
-	j.pool.results <- result
-}
-
-// NewPool initializes and returns a new pool instance
-func NewPool(consumers int, jobs int) *Pool {
+	if workers == 0 {
+		panic("invalid workers '0'")
+	}
 
 	p := &Pool{
-		wg:        new(sync.WaitGroup),
-		jobs:      make(chan *Job, jobs),
-		results:   make(chan interface{}, jobs),
-		cancel:    make(chan struct{}),
-		consumers: consumers,
+		work:   make(chan consumableWork, workers*2),
+		cancel: make(chan struct{}),
+	}
+
+	// fire up workers here
+	for i := 0; i < int(workers); i++ {
+		go func(p *Pool) {
+
+			var cw consumableWork
+
+			defer func(p *Pool) {
+				if err := recover(); err != nil {
+
+					trace := make([]byte, 1<<16)
+					n := runtime.Stack(trace, true)
+
+					if n > 7000 {
+						n = 7000
+					}
+
+					s := string(trace[:n])
+
+					log.Println(s)
+					p.cancelWithError(&WorkUnitCancelledRecoveryErr{s: fmt.Sprintf(errWorkCancelledRecovery, s)})
+				}
+			}(p)
+
+			for {
+				select {
+				case cw = <-p.work:
+
+					if cw.fn == nil {
+						continue
+					}
+
+					cw.wu.Value, cw.wu.Error = cw.fn()
+
+					// who knows where the Done channel is being listened to on the other end
+					// don't want this to block just because caller is waiting on another unit
+					// of work to be done first.
+					go func() {
+						cw.wu.Done <- struct{}{}
+					}()
+				case <-p.cancel:
+					return
+				}
+			}
+
+		}(p)
 	}
 
 	return p
 }
 
-// AddConsumerHook registers a Consumer Hook function to be called by every consumer
-// and setting the return value on every job prior to running. Use case is for
-// reusing database connections.
-func (p *Pool) AddConsumerHook(fn ConsumerHook) {
-	p.consumerHook = fn
+// Queue queues the work to be run, and starts processing immediatly
+func (p *Pool) Queue(fn WorkFunc) *WorkUnit {
+
+	w := &WorkUnit{
+		Done: make(chan struct{}),
+	}
+
+	if p.closed.Load() != nil {
+
+		go func() {
+			w.Error = &WorkUnitCloseError{s: errWorkUnitClosed}
+			w.Done <- struct{}{}
+		}()
+
+		return w
+	}
+
+	go func() {
+		p.work <- consumableWork{fn: fn, wu: w}
+	}()
+
+	return w
 }
 
-func (p *Pool) cancelJobs() {
-	for range p.jobs {
-		p.wg.Done()
+func (p *Pool) cancelWithError(err error) {
+
+	close(p.cancel)
+
+	for cw := range p.work {
+		go func(cw consumableWork) {
+			cw.wu.Error = err
+			cw.wu.Done <- struct{}{}
+		}(cw)
 	}
-}
-
-// Queue adds a job to be processed and the params to be passed to it.
-func (p *Pool) Queue(fn JobFunc, params ...interface{}) {
-
-	p.once.Do(func() {
-		for i := 0; i < p.consumers; i++ {
-			go func(p *Pool) {
-				defer func(p *Pool) {
-					if err := recover(); err != nil {
-						trace := make([]byte, 1<<16)
-						n := runtime.Stack(trace, true)
-						rerr := &ErrRecovery{
-							s: fmt.Sprintf(errRecoveryString, err, trace[:n]),
-						}
-						p.results <- rerr
-						p.Cancel()
-						p.wg.Done()
-					}
-				}(p)
-
-				var consumerParm interface{}
-
-				if p.consumerHook != nil {
-					consumerParm = p.consumerHook()
-				}
-
-				for {
-					select {
-					case j := <-p.jobs:
-						if reflect.ValueOf(j).IsNil() {
-							return
-						}
-
-						j.hookParam = consumerParm
-						j.fn(j)
-						p.wg.Done()
-					case <-p.cancel:
-						return
-					}
-				}
-			}(p)
-		}
-	})
-
-	p.cancelLock.Lock()
-	defer p.cancelLock.Unlock()
-
-	if p.cancelled {
-		return
-	}
-
-	job := &Job{
-		fn:     fn,
-		params: params,
-		pool:   p,
-	}
-
-	p.wg.Add(1)
-	p.jobs <- job
-
 }
 
 // Cancel cancels all jobs not already running.
 // It can also be called from within a job through the Job object
 func (p *Pool) Cancel() {
-	close(p.cancel)
-	p.cancelLock.Lock()
-	p.cancelled = true
-	p.cancelLock.Unlock()
-	p.cancelJobs()
+	p.cancelWithError(&WorkUnitCancelledErr{s: errWorkCancelled})
 }
 
-// Results returns the processed job results
-func (p *Pool) Results() <-chan interface{} {
+// Close cleans up the pool workers and channels
+func (p *Pool) Close() {
+	close(p.cancel)
 
-	close(p.jobs)
+	p.closed.Store(struct{}{})
+	close(p.work)
 
-	go func() {
-		p.wg.Wait()
-		close(p.results)
-	}()
+	err := &WorkUnitCloseError{s: errWorkUnitClosed}
 
-	return p.results
+	for cw := range p.work {
+		go func(cw consumableWork) {
+			cw.wu.Error = err
+			cw.wu.Done <- struct{}{}
+		}(cw)
+	}
 }

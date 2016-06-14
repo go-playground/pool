@@ -2,46 +2,46 @@ package pool
 
 import (
 	"fmt"
-	"log"
+	"math"
 	"runtime"
 	"sync"
 	"sync/atomic"
 )
 
 const (
-	errWorkCancelled         = "Work Cancelled"
-	errWorkCancelledRecovery = "Work Cancelled due to Work Unit Error, Stack Trace:\n %s"
-	errWorkUnitClosed        = "Pool has been closed, work not run."
+	errCancelled = "ERROR: Work Unit Cancelled"
+	errRecovery  = "ERROR: Work Unit failed due to a recoverable error: '%v'\n, Stack Trace:\n %s"
+	errClosed    = "ERROR: Work Unit added/run after the pool had been closed or cancelled"
 )
 
-// WorkUnitCloseError is the error returned to all work units that may have been in or added to the pool after it's closing.
-type WorkUnitCloseError struct {
+// ErrRecovery contains the error when a consumer goroutine needed to be recovers
+type ErrRecovery struct {
+	s string
+}
+
+// Error prints recovery error
+func (e *ErrRecovery) Error() string {
+	return e.s
+}
+
+// ErrPoolClosed is the error returned to all work units that may have been in or added to the pool after it's closing.
+type ErrPoolClosed struct {
 	s string
 }
 
 // Error prints Work Unit Close error
-func (wuc *WorkUnitCloseError) Error() string {
-	return wuc.s
+func (e *ErrPoolClosed) Error() string {
+	return e.s
 }
 
-// WorkUnitCancelledErr is the error returned to all work units when a pool is cancelled.
-type WorkUnitCancelledErr struct {
+// ErrCancelled is the error returned to a Work Unit when it has been cancelled.
+type ErrCancelled struct {
 	s string
 }
 
-// Error prints Work Unit Cancelation error
-func (wuc *WorkUnitCancelledErr) Error() string {
-	return wuc.s
-}
-
-// WorkUnitCancelledRecoveryErr is the error returned to all work units when a pool is cancelled becaue of an recovery error.
-type WorkUnitCancelledRecoveryErr struct {
-	s string
-}
-
-// Error prints Work Unit Cancelation error that cause the worker to recover
-func (wuc *WorkUnitCancelledRecoveryErr) Error() string {
-	return wuc.s
+// Error prints Work Unit Cancellation error
+func (e *ErrCancelled) Error() string {
+	return e.s
 }
 
 // WorkUnit contains a single unit of works values
@@ -51,17 +51,20 @@ type WorkUnit struct {
 	Done      chan struct{}
 	fn        WorkFunc
 	cancelled atomic.Value
+	running   atomic.Value
 }
 
 // Cancel cancels this specific unit of work.
 func (wu *WorkUnit) Cancel() {
-	wu.cancelWithError(&WorkUnitCancelledErr{s: errWorkCancelled})
+	wu.cancelWithError(&ErrCancelled{s: errCancelled})
 }
 
 func (wu *WorkUnit) cancelWithError(err error) {
-	wu.cancelled.Store(struct{}{})
-	wu.Error = err
-	close(wu.Done)
+	if wu.running.Load() == nil && wu.cancelled.Load() == nil {
+		wu.cancelled.Store(struct{}{})
+		wu.Error = err
+		close(wu.Done)
+	}
 }
 
 // WorkFunc is the function type needed by the pool
@@ -101,11 +104,13 @@ func (p *Pool) initialize() {
 
 	// fire up workers here
 	for i := 0; i < int(p.workers); i++ {
-		p.newWorker()
+		p.newWorker(p.work, p.cancel)
 	}
 }
 
-func (p *Pool) newWorker() {
+// passing work and cancel channels to newWorker() to avoid any potential race condition
+// betweeen p.work read & write
+func (p *Pool) newWorker(work chan *WorkUnit, cancel chan struct{}) {
 	go func(p *Pool) {
 
 		var wu *WorkUnit
@@ -116,31 +121,28 @@ func (p *Pool) newWorker() {
 				trace := make([]byte, 1<<16)
 				n := runtime.Stack(trace, true)
 
-				if n > 7000 {
-					n = 7000
-				}
-
-				s := string(trace[:n])
-
-				log.Println(s)
+				s := fmt.Sprintf(errRecovery, err, string(trace[:int(math.Min(float64(n), float64(7000)))]))
 
 				iwu := wu
-				iwu.cancelWithError(&WorkUnitCancelledRecoveryErr{s: fmt.Sprintf(errWorkCancelledRecovery, s)})
+				iwu.Error = &ErrRecovery{s: s}
+				close(iwu.Done)
 
 				// need to fire up new worker to replace this one as this one is exiting
-				p.newWorker()
+				p.newWorker(p.work, p.cancel)
 			}
 		}(p)
 
 		for {
 			select {
-			case wu = <-p.work:
+			case wu = <-work:
 
 				// possible for one more nilled out value to make it
 				// through when channel closed, don't quite understad the why
 				if wu == nil {
 					continue
 				}
+
+				wu.running.Store(struct{}{})
 
 				// support for individual WorkUnit cancellation
 				// and batch job cancellation
@@ -153,7 +155,7 @@ func (p *Pool) newWorker() {
 				// of work to be done first so we use close
 				close(wu.Done)
 
-			case <-p.cancel:
+			case <-cancel:
 				return
 			}
 		}
@@ -172,35 +174,32 @@ func (p *Pool) Queue(fn WorkFunc) *WorkUnit {
 	go func() {
 		p.m.RLock()
 		if p.closed {
-			w.Error = &WorkUnitCloseError{s: errWorkUnitClosed}
-			close(w.Done)
+			w.Error = &ErrPoolClosed{s: errClosed}
+			if w.cancelled.Load() == nil {
+				close(w.Done)
+			}
 			p.m.RUnlock()
 			return
 		}
-		p.m.RUnlock()
 
 		p.work <- w
+
+		p.m.RUnlock()
 	}()
 
 	return w
 }
 
-// Cancel cancels all jobs not already running.
-// It can also be called from within a job through the Job object
-func (p *Pool) Cancel() {
+// Reset reinitializes a pool that has been closed/cancelled back to a working state.
+// if the pool has not been closed/cancelled, nothing happens as the pool is still in
+// a valid running state
+func (p *Pool) Reset() {
 
 	p.m.Lock()
 
-	err := &WorkUnitCancelledErr{s: errWorkCancelled}
-
 	if !p.closed {
-		close(p.cancel)
-		close(p.work)
-		p.closed = true
-	}
-
-	for wu := range p.work {
-		wu.cancelWithError(err)
+		p.m.Unlock()
+		return
 	}
 
 	// cancelled the pool, not closed it, pool will be usable after calling initialize().
@@ -208,8 +207,7 @@ func (p *Pool) Cancel() {
 	p.m.Unlock()
 }
 
-// Close cleans up the pool workers and channels
-func (p *Pool) Close() {
+func (p *Pool) closeWithError(err error) {
 
 	p.m.Lock()
 
@@ -219,11 +217,27 @@ func (p *Pool) Close() {
 		p.closed = true
 	}
 
-	err := &WorkUnitCloseError{s: errWorkUnitClosed}
-
 	for wu := range p.work {
 		wu.cancelWithError(err)
 	}
 
 	p.m.Unlock()
+}
+
+// Cancel cleans up the pool workers and channels and cancels and pending
+// work still yet to be processed.
+// call Reset() to reinitialize the pool for use.
+func (p *Pool) Cancel() {
+
+	err := &ErrCancelled{s: errCancelled}
+	p.closeWithError(err)
+}
+
+// Close cleans up the pool workers and channels and cancels any pending
+// work still yet to be processed.
+// call Reset() to reinitialize the pool for use.
+func (p *Pool) Close() {
+
+	err := &ErrPoolClosed{s: errClosed}
+	p.closeWithError(err)
 }

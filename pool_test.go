@@ -1,6 +1,7 @@
 package pool
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -20,14 +21,19 @@ import (
 // go test -coverprofile cover.out && go tool cover -html=cover.out -o cover.html
 //
 
-// func TestMain(m *testing.M) {
+// global pool for testing long running pool
+var gpool *Pool
 
-// 	// setup
+func TestMain(m *testing.M) {
 
-// 	os.Exit(m.Run())
+	// setup
+	gpool = New(4)
+	defer gpool.Close()
 
-// 	// teardown
-// }
+	os.Exit(m.Run())
+
+	// teardown
+}
 
 func TestPool(t *testing.T) {
 
@@ -42,15 +48,6 @@ func TestPool(t *testing.T) {
 			return nil, nil
 		}
 	}
-
-	// pool := NewPool(4, 4)
-
-	// fn := func(job *Job) {
-
-	// 	i := job.Params()[0].(int)
-	// 	time.Sleep(time.Second * 1)
-	// 	job.Return(i)
-	// }
 
 	for i := 0; i < 4; i++ {
 		wu := pool.Queue(newFunc(time.Second * 1))
@@ -67,121 +64,104 @@ func TestPool(t *testing.T) {
 	}
 
 	Equal(t, count, 4)
+
+	pool.Close() // testing no error occurs as Close will be called twice once defer pool.Close() fires
 }
 
-// func TestConsumerHook(t *testing.T) {
+func TestCancel(t *testing.T) {
 
-// 	pool := NewPool(4, 4)
-// 	pool.AddConsumerHook(func() interface{} { return 1 })
+	var res []*WorkUnit
 
-// 	fn := func(job *Job) {
+	pool := gpool
+	defer pool.Close()
 
-// 		j := job.HookParam().(int)
-// 		job.Return(j)
-// 	}
+	newFunc := func(d time.Duration) WorkFunc {
+		return func() (interface{}, error) {
+			time.Sleep(d)
+			return 1, nil
+		}
+	}
 
-// 	for i := 0; i < 4; i++ {
-// 		pool.Queue(fn)
-// 	}
+	for i := 0; i < 75; i++ {
+		wu := pool.Queue(newFunc(time.Second * 1))
+		res = append(res, wu)
+	}
 
-// 	var count int
+	pool.Cancel()
 
-// 	for v := range pool.Results() {
-// 		count++
+	var count int
 
-// 		val, ok := v.(int)
-// 		Equal(t, ok, true)
-// 		Equal(t, val, 1)
-// 	}
+	for _, wu := range res {
+		<-wu.Done
 
-// 	Equal(t, count, 4)
-// }
+		if wu.Error != nil {
+			_, ok := wu.Error.(*ErrCancelled)
+			if !ok {
+				_, ok = wu.Error.(*ErrPoolClosed)
+				if ok {
+					Equal(t, wu.Error.Error(), "ERROR: Work Unit added/run after the pool had been closed or cancelled")
+				}
+			} else {
+				Equal(t, wu.Error.Error(), "ERROR: Work Unit Cancelled")
+			}
+			Equal(t, ok, true)
+			continue
+		}
 
-// func TestCancel(t *testing.T) {
+		count += wu.Value.(int)
+	}
 
-// 	pool := NewPool(2, 4)
+	NotEqual(t, count, 40)
 
-// 	fn := func(job *Job) {
+	// reset and test again
+	pool.Reset()
 
-// 		i := job.Params()[0].(int)
-// 		if i == 1 {
-// 			job.Cancel()
-// 			return
-// 		}
-// 		time.Sleep(time.Second * 1)
-// 		job.Return(i)
-// 	}
+	wrk := pool.Queue(newFunc(time.Millisecond * 300))
+	<-wrk.Done
 
-// 	for i := 0; i < 4; i++ {
-// 		pool.Queue(fn, i)
-// 	}
+	_, ok := wrk.Value.(int)
+	Equal(t, ok, true)
 
-// 	var count int
+	wrk = pool.Queue(newFunc(time.Millisecond * 300))
+	time.Sleep(time.Second * 1)
+	wrk.Cancel()
+	<-wrk.Done // proving we don't get stuck here after cancel
+	Equal(t, wrk.Error, nil)
 
-// 	for range pool.Results() {
-// 		count++
-// 	}
+	pool.Reset() // testing that we can do this and nothing bad will happen as it checks if pool closed
+}
 
-// 	NotEqual(t, count, 4)
-// }
+func TestPanicRecovery(t *testing.T) {
 
-// func TestCancelStillEnqueing(t *testing.T) {
+	pool := New(2)
+	defer pool.Close()
 
-// 	pool := NewPool(2, 4)
+	newFunc := func(d time.Duration, i int) WorkFunc {
+		return func() (interface{}, error) {
+			if i == 1 {
+				panic("OMG OMG OMG! something bad happened!")
+			}
+			time.Sleep(d)
+			return 1, nil
+		}
+	}
 
-// 	fn := func(job *Job) {
+	var wrk *WorkUnit
+	for i := 0; i < 4; i++ {
+		time.Sleep(time.Second * 1)
+		if i == 1 {
+			wrk = pool.Queue(newFunc(time.Second*1, i))
+			continue
+		}
+		pool.Queue(newFunc(time.Second*1, i))
+	}
+	<-wrk.Done
 
-// 		i := job.Params()[0].(int)
-// 		if i == 1 {
-// 			job.Cancel()
-// 			return
-// 		}
-// 		time.Sleep(time.Second * 1)
-// 		job.Return(i)
-// 	}
+	NotEqual(t, wrk.Error, nil)
+	Equal(t, wrk.Error.Error()[0:90], "ERROR: Work Unit failed due to a recoverable error: 'OMG OMG OMG! something bad happened!'")
 
-// 	for i := 0; i < 4; i++ {
-// 		time.Sleep(200 * time.Millisecond)
-// 		pool.Queue(fn, i)
-// 	}
+}
 
-// 	var count int
-
-// 	for range pool.Results() {
-// 		count++
-// 	}
-
-// 	NotEqual(t, count, 4)
-// }
-
-// func TestPanicRecovery(t *testing.T) {
-
-// 	pool := NewPool(2, 4)
-
-// 	fn := func(job *Job) {
-
-// 		i := job.Params()[0].(int)
-// 		if i == 1 {
-// 			panic("OMG OMG OMG! something bad happened!")
-// 		}
-// 		time.Sleep(time.Second * 1)
-// 		job.Return(i)
-// 	}
-
-// 	for i := 0; i < 4; i++ {
-// 		time.Sleep(200 * time.Millisecond)
-// 		pool.Queue(fn, i)
-// 	}
-
-// 	var count int
-
-// 	for result := range pool.Results() {
-// 		err, ok := result.(*ErrRecovery)
-// 		if ok {
-// 			count++
-// 			NotEqual(t, len(err.Error()), 0)
-// 		}
-// 	}
-
-// 	Equal(t, count, 1)
-// }
+func TestBadWorkerCount(t *testing.T) {
+	PanicMatches(t, func() { New(0) }, "invalid workers '0'")
+}

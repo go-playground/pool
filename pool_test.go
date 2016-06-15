@@ -8,8 +8,6 @@ import (
 	. "gopkg.in/go-playground/assert.v1"
 )
 
-// import . "gopkg.in/go-playground/assert.v1"
-
 // NOTES:
 // - Run "go test" to run tests
 // - Run "gocov test | gocov report" to report on test converage by file

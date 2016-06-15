@@ -40,69 +40,98 @@ func BenchmarkSmallRun(b *testing.B) {
 	}
 }
 
-// func BenchmarkSmallCancel(b *testing.B) {
+func BenchmarkSmallCancel(b *testing.B) {
 
-// 	pool := NewPool(4, 20)
+	res := make([]*WorkUnit, 0, 20)
 
-// 	fn := func(job *Job) {
+	b.ReportAllocs()
 
-// 		i := job.Params()[0].(int)
-// 		if i == 6 {
-// 			job.Cancel()
-// 			return
-// 		}
+	pool := New(4)
+	defer pool.Close()
 
-// 		time.Sleep(time.Second * 1)
-// 		job.Return(i)
-// 	}
+	newFunc := func(i int) func() (interface{}, error) {
+		return func() (interface{}, error) {
+			time.Sleep(time.Second * 1)
+			return i, nil
+		}
+	}
 
-// 	for i := 0; i < 20; i++ {
-// 		pool.Queue(fn, i)
-// 	}
+	for i := 0; i < 20; i++ {
+		if i == 6 {
+			pool.Cancel()
+		}
+		res = append(res, pool.Queue(newFunc(i)))
+	}
 
-// 	for range pool.Results() {
-// 	}
-// }
+	for _, wrk := range res {
+		if wrk == nil {
+			continue
+		}
+		<-wrk.Done
+	}
+}
 
-// func BenchmarkLargeCancel(b *testing.B) {
+func BenchmarkLargeCancel(b *testing.B) {
 
-// 	pool := NewPool(4, 1000)
+	res := make([]*WorkUnit, 0, 1000)
 
-// 	fn := func(job *Job) {
+	b.ReportAllocs()
 
-// 		i := job.Params()[0].(int)
-// 		if i == 6 {
-// 			job.Cancel()
-// 			return
-// 		}
+	pool := New(4)
+	defer pool.Close()
 
-// 		time.Sleep(time.Second * 1)
-// 		job.Return(i)
-// 	}
+	newFunc := func(i int) func() (interface{}, error) {
+		return func() (interface{}, error) {
+			time.Sleep(time.Second * 1)
+			return i, nil
+		}
+	}
 
-// 	for i := 0; i < 1000; i++ {
-// 		pool.Queue(fn, i)
-// 	}
+	for i := 0; i < 1000; i++ {
+		if i == 6 {
+			pool.Cancel()
+		}
+		res = append(res, pool.Queue(newFunc(i)))
+	}
 
-// 	for range pool.Results() {
-// 	}
-// }
+	for _, wrk := range res {
+		if wrk == nil {
+			continue
+		}
+		<-wrk.Done
+	}
+}
 
-// func BenchmarkOverconsumeLargeRun(b *testing.B) {
+func BenchmarkOverconsumeLargeRun(b *testing.B) {
 
-// 	pool := NewPool(25, 100)
+	res := make([]*WorkUnit, 100)
 
-// 	fn := func(job *Job) {
+	b.ReportAllocs()
 
-// 		i := job.Params()[0].(int)
-// 		time.Sleep(time.Second * 1)
-// 		job.Return(i)
-// 	}
+	pool := New(25)
+	defer pool.Close()
 
-// 	for i := 0; i < 100; i++ {
-// 		pool.Queue(fn, i)
-// 	}
+	newFunc := func(i int) func() (interface{}, error) {
+		return func() (interface{}, error) {
+			time.Sleep(time.Second * 1)
+			return i, nil
+		}
+	}
 
-// 	for range pool.Results() {
-// 	}
-// }
+	for i := 0; i < 100; i++ {
+		res[i] = pool.Queue(newFunc(i))
+	}
+
+	var count int
+
+	for _, cw := range res {
+
+		<-cw.Done
+
+		count += cw.Value.(int)
+	}
+
+	if count != 100 {
+		b.Fatal("Count Incorrect")
+	}
+}

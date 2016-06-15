@@ -148,12 +148,12 @@ func (p *Pool) newWorker(work chan *WorkUnit, cancel chan struct{}) {
 				// and batch job cancellation
 				if wu.cancelled.Load() == nil {
 					wu.Value, wu.Error = wu.fn()
-				}
 
-				// who knows where the Done channel is being listened to on the other end
-				// don't want this to block just because caller is waiting on another unit
-				// of work to be done first so we use close
-				close(wu.Done)
+					// who knows where the Done channel is being listened to on the other end
+					// don't want this to block just because caller is waiting on another unit
+					// of work to be done first so we use close
+					close(wu.Done)
+				}
 
 			case <-cancel:
 				return

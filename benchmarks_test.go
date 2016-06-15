@@ -12,7 +12,6 @@ func BenchmarkSmallRun(b *testing.B) {
 	b.ReportAllocs()
 
 	pool := New(10)
-	b.ReportAllocs()
 	defer pool.Close()
 
 	fn := func() (interface{}, error) {
@@ -114,7 +113,7 @@ func BenchmarkOverconsumeLargeRun(b *testing.B) {
 	newFunc := func(i int) func() (interface{}, error) {
 		return func() (interface{}, error) {
 			time.Sleep(time.Second * 1)
-			return i, nil
+			return 1, nil
 		}
 	}
 
@@ -132,6 +131,35 @@ func BenchmarkOverconsumeLargeRun(b *testing.B) {
 	}
 
 	if count != 100 {
+		b.Fatalf("Count Incorrect, Expected '100' Got '%d'", count)
+	}
+}
+
+func BenchmarkBatchSmallRun(b *testing.B) {
+
+	fn := func() (interface{}, error) {
+		time.Sleep(time.Second * 1)
+		return 1, nil
+	}
+
+	pool := New(10)
+	defer pool.Close()
+
+	batch := pool.Batch()
+
+	for i := 0; i < 10; i++ {
+		batch.Queue(fn)
+	}
+
+	batch.QueueComplete()
+
+	var count int
+
+	for cw := range batch.Results() {
+		count += cw.Value.(int)
+	}
+
+	if count != 10 {
 		b.Fatal("Count Incorrect")
 	}
 }

@@ -80,7 +80,7 @@ func TestCancel(t *testing.T) {
 		}
 	}
 
-	for i := 0; i < 75; i++ {
+	for i := 0; i < 125; i++ {
 		wu := pool.Queue(newFunc(time.Second * 1))
 		res = append(res, wu)
 	}

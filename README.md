@@ -1,9 +1,12 @@
 Package pool
 ============
 
-[![Build Status](https://semaphoreci.com/api/v1/projects/a85ae32e-f437-40f1-9652-2525ec282658/593594/badge.svg)](https://semaphoreci.com/joeybloggs/pool)
+![Project status](https://img.shields.io/badge/version-2.0.0-green.svg)
+[![Build Status](https://semaphoreci.com/api/v1/joeybloggs/pool/branches/v2/badge.svg)](https://semaphoreci.com/joeybloggs/pool)
 [![Coverage Status](https://coveralls.io/repos/go-playground/pool/badge.svg?branch=v2&service=github)](https://coveralls.io/github/go-playground/pool?branch=v2)
+[![Go Report Card](https://goreportcard.com/badge/gopkg.in/go-playground/pool.v2)](https://goreportcard.com/report/gopkg.in/go-playground/pool.v2)
 [![GoDoc](https://godoc.org/gopkg.in/go-playground/pool.v2?status.svg)](https://godoc.org/gopkg.in/go-playground/pool.v2)
+![License](https://img.shields.io/dub/l/vibe-d.svg)
 
 Package pool implements a consumer goroutine pool for easier goroutine handling. 
 

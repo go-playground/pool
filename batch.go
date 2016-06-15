@@ -30,7 +30,7 @@ func (p *Pool) Batch() *Batch {
 	}
 }
 
-// Queue queues the work to be run in the pool and starts processing immediatly
+// Queue queues the work to be run in the pool and starts processing immediately
 // and also retains a reference for Cancellation and outputting to results.
 // WARNING be sure to call QueueComplete() once all work has been Queued.
 func (b *Batch) Queue(fn WorkFunc) {

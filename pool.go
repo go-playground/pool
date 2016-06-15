@@ -163,7 +163,7 @@ func (p *Pool) newWorker(work chan *WorkUnit, cancel chan struct{}) {
 	}(p)
 }
 
-// Queue queues the work to be run, and starts processing immediatly
+// Queue queues the work to be run, and starts processing immediately
 func (p *Pool) Queue(fn WorkFunc) *WorkUnit {
 
 	w := &WorkUnit{

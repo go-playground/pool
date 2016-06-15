@@ -88,7 +88,7 @@ func TestBatchCancelItemsThrownAway(t *testing.T) {
 	batch := pool.Batch()
 
 	go func() {
-		for i := 0; i < 75; i++ {
+		for i := 0; i < 40; i++ {
 			batch.Queue(newFunc(i))
 		}
 	}()
@@ -101,7 +101,7 @@ func TestBatchCancelItemsThrownAway(t *testing.T) {
 		count++
 	}
 
-	NotEqual(t, count, 75)
+	NotEqual(t, count, 40)
 }
 
 func TestBatchCancelItemsCancelledAfterward(t *testing.T) {
@@ -119,7 +119,7 @@ func TestBatchCancelItemsCancelledAfterward(t *testing.T) {
 	batch := pool.Batch()
 
 	go func() {
-		for i := 0; i < 75; i++ {
+		for i := 0; i < 40; i++ {
 			batch.Queue(newFunc(i))
 		}
 	}()
@@ -133,5 +133,5 @@ func TestBatchCancelItemsCancelledAfterward(t *testing.T) {
 		count++
 	}
 
-	Equal(t, count, 75)
+	Equal(t, count, 40)
 }

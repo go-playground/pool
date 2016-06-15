@@ -80,11 +80,14 @@ func TestCancel(t *testing.T) {
 		}
 	}
 
-	for i := 0; i < 125; i++ {
-		wu := pool.Queue(newFunc(time.Second * 1))
-		res = append(res, wu)
-	}
+	go func() {
+		for i := 0; i < 40; i++ {
+			wu := pool.Queue(newFunc(time.Second * 1))
+			res = append(res, wu)
+		}
+	}()
 
+	time.Sleep(time.Second * 1)
 	pool.Cancel()
 
 	var count int
@@ -127,6 +130,13 @@ func TestCancel(t *testing.T) {
 	Equal(t, wrk.Error, nil)
 
 	pool.Reset() // testing that we can do this and nothing bad will happen as it checks if pool closed
+
+	pool.Close()
+
+	wu := pool.Queue(newFunc(time.Second * 1))
+	<-wu.Done
+	NotEqual(t, wu.Error, nil)
+	Equal(t, wu.Error.Error(), "ERROR: Work Unit added/run after the pool had been closed or cancelled")
 }
 
 func TestPanicRecovery(t *testing.T) {

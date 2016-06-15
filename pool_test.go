@@ -2,6 +2,7 @@ package pool
 
 import (
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -68,7 +69,9 @@ func TestPool(t *testing.T) {
 
 func TestCancel(t *testing.T) {
 
-	var res []*WorkUnit
+	m := new(sync.RWMutex)
+	var closed bool
+	c := make(chan *WorkUnit, 100)
 
 	pool := gpool
 	defer pool.Close()
@@ -80,19 +83,32 @@ func TestCancel(t *testing.T) {
 		}
 	}
 
-	go func() {
+	go func(ch chan *WorkUnit) {
 		for i := 0; i < 40; i++ {
-			wu := pool.Queue(newFunc(time.Second * 1))
-			res = append(res, wu)
+
+			go func(ch chan *WorkUnit) {
+				m.RLock()
+				if closed {
+					m.RUnlock()
+					return
+				}
+
+				ch <- pool.Queue(newFunc(time.Second * 1))
+				m.RUnlock()
+			}(ch)
 		}
-	}()
+	}(c)
 
 	time.Sleep(time.Second * 1)
 	pool.Cancel()
+	m.Lock()
+	closed = true
+	close(c)
+	m.Unlock()
 
 	var count int
 
-	for _, wu := range res {
+	for wu := range c {
 		<-wu.Done
 
 		if wu.Error != nil {

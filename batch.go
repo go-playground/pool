@@ -38,6 +38,7 @@ func (b *Batch) Queue(fn WorkFunc) {
 	b.m.Lock()
 
 	if b.closed {
+		b.m.Unlock()
 		return
 	}
 

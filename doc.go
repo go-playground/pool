@@ -24,7 +24,8 @@ Pool v2 advantages over Pool v1:
 Pool v3 advantages over Pool v2:
 
     - Objects are not interfaces allowing for less breaking changes going forward.
-    - Now there are 2 Pool types, both completely interchangeable, a limited worker pool and unlimited pool.
+    - Now there are 2 Pool types, both completely interchangeable, a limited worker pool
+      and unlimited pool.
     - Simpler usage of Work Units, instead of `<-work.Done` now can do `work.Wait()`
 
 Important Information READ THIS!
@@ -39,8 +40,8 @@ important usage information
     - When Batching DO NOT FORGET TO CALL batch.QueueComplete(),
       if you do the Batch WILL deadlock
 
-    - It is your responsibility to call WorkUnit.IsCancelled() to check if it's cancelled after a blocking
-      operation like waiting for a connection from a pool.
+    - It is your responsibility to call WorkUnit.IsCancelled() to check if it's cancelled
+      after a blocking operation like waiting for a connection from a pool.
 
 
 Usage and documentation

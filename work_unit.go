@@ -14,7 +14,8 @@ type WorkUnit interface {
 	// Error returns the Work Unit's error
 	Error() error
 
-	// Cancel cancels this specific unit of work, if not already committed to processing.
+	// Cancel cancels this specific unit of work, if not already committed
+	// to processing.
 	Cancel()
 
 	// IsCancelled returns if the Work Unit has been cancelled.

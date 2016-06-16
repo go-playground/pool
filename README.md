@@ -1,7 +1,7 @@
 Package pool
 ============
 
-![Project status](https://img.shields.io/badge/version-2.0.1-green.svg)
+![Project status](https://img.shields.io/badge/version-2.1.0-green.svg)
 [![Build Status](https://semaphoreci.com/api/v1/joeybloggs/pool/branches/v2/badge.svg)](https://semaphoreci.com/joeybloggs/pool)
 [![Coverage Status](https://coveralls.io/repos/go-playground/pool/badge.svg?branch=v2&service=github)](https://coveralls.io/github/go-playground/pool?branch=v2)
 [![Go Report Card](https://goreportcard.com/badge/gopkg.in/go-playground/pool.v2)](https://goreportcard.com/report/gopkg.in/go-playground/pool.v2)

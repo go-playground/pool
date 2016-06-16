@@ -76,7 +76,7 @@ type Pool struct {
 	work    chan *WorkUnit
 	cancel  chan struct{}
 	closed  bool
-	m       *sync.RWMutex
+	m       sync.RWMutex
 }
 
 // New returns a new pool instance.
@@ -88,7 +88,6 @@ func New(workers uint) *Pool {
 
 	p := &Pool{
 		workers: workers,
-		m:       new(sync.RWMutex),
 	}
 
 	p.initialize()

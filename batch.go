@@ -5,7 +5,7 @@ import "sync"
 // Batch contains all information for a batch run of WorkUnits
 type Batch struct {
 	pool    *Pool
-	m       *sync.Mutex
+	m       sync.Mutex
 	units   []*WorkUnit
 	results chan *WorkUnit
 	done    chan struct{}
@@ -22,7 +22,6 @@ type Batch struct {
 func (p *Pool) Batch() *Batch {
 	return &Batch{
 		pool:    p,
-		m:       new(sync.Mutex),
 		units:   make([]*WorkUnit, 0, 4), // capacity it to 4 so it doesn't grow and allocate too many times.
 		results: make(chan *WorkUnit),
 		done:    make(chan struct{}),

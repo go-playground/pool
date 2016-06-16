@@ -8,7 +8,7 @@ Package pool
 [![GoDoc](https://godoc.org/gopkg.in/go-playground/pool.v3?status.svg)](https://godoc.org/gopkg.in/go-playground/pool.v3)
 ![License](https://img.shields.io/dub/l/vibe-d.svg)
 
-Package pool implements a consumer goroutine pool for easier goroutine handling. 
+Package pool implements a limited consumer goroutine or unlimited goroutine pool for easier goroutine handling and cancellation. 
 
 Features:
 

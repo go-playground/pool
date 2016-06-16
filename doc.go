@@ -1,5 +1,5 @@
 /*
-Package pool implements a consumer goroutine pool for easier goroutine handling.
+Package pool implements a limited consumer goroutine or unlimited goroutine pool for easier goroutine handling and cancellation.
 
 
 Features:

@@ -5,17 +5,21 @@ import (
 	"time"
 )
 
-func BenchmarkLimitedSmallRun(b *testing.B) {
+func BenchmarkUnlimitedSmallRun(b *testing.B) {
 
 	res := make([]WorkUnit, 10)
 
 	b.ReportAllocs()
 
-	pool := NewLimited(10)
+	pool := New()
 	defer pool.Close()
 
-	fn := func(WorkUnit) (interface{}, error) {
-		time.Sleep(time.Second * 1)
+	fn := func(wu WorkUnit) (interface{}, error) {
+		time.Sleep(time.Millisecond * 500)
+		if wu.IsCancelled() {
+			return nil, nil
+		}
+		time.Sleep(time.Millisecond * 500)
 		return 1, nil
 	}
 
@@ -39,18 +43,22 @@ func BenchmarkLimitedSmallRun(b *testing.B) {
 	}
 }
 
-func BenchmarkLimitedSmallCancel(b *testing.B) {
+func BenchmarkUnlimitedSmallCancel(b *testing.B) {
 
 	res := make([]WorkUnit, 0, 20)
 
 	b.ReportAllocs()
 
-	pool := NewLimited(4)
+	pool := New()
 	defer pool.Close()
 
 	newFunc := func(i int) WorkFunc {
-		return func(WorkUnit) (interface{}, error) {
-			time.Sleep(time.Second * 1)
+		return func(wu WorkUnit) (interface{}, error) {
+			time.Sleep(time.Millisecond * 500)
+			if wu.IsCancelled() {
+				return nil, nil
+			}
+			time.Sleep(time.Millisecond * 500)
 			return i, nil
 		}
 	}
@@ -70,18 +78,22 @@ func BenchmarkLimitedSmallCancel(b *testing.B) {
 	}
 }
 
-func BenchmarkLimitedLargeCancel(b *testing.B) {
+func BenchmarkUnlimitedLargeCancel(b *testing.B) {
 
 	res := make([]WorkUnit, 0, 1000)
 
 	b.ReportAllocs()
 
-	pool := NewLimited(4)
+	pool := New()
 	defer pool.Close()
 
 	newFunc := func(i int) WorkFunc {
-		return func(WorkUnit) (interface{}, error) {
-			time.Sleep(time.Second * 1)
+		return func(wu WorkUnit) (interface{}, error) {
+			time.Sleep(time.Millisecond * 500)
+			if wu.IsCancelled() {
+				return nil, nil
+			}
+			time.Sleep(time.Millisecond * 500)
 			return i, nil
 		}
 	}
@@ -101,18 +113,22 @@ func BenchmarkLimitedLargeCancel(b *testing.B) {
 	}
 }
 
-func BenchmarkLimitedOverconsumeLargeRun(b *testing.B) {
+func BenchmarkUnlimitedLargeRun(b *testing.B) {
 
 	res := make([]WorkUnit, 100)
 
 	b.ReportAllocs()
 
-	pool := NewLimited(25)
+	pool := New()
 	defer pool.Close()
 
 	newFunc := func(i int) WorkFunc {
-		return func(WorkUnit) (interface{}, error) {
-			time.Sleep(time.Second * 1)
+		return func(wu WorkUnit) (interface{}, error) {
+			time.Sleep(time.Millisecond * 500)
+			if wu.IsCancelled() {
+				return nil, nil
+			}
+			time.Sleep(time.Millisecond * 500)
 			return 1, nil
 		}
 	}
@@ -135,14 +151,18 @@ func BenchmarkLimitedOverconsumeLargeRun(b *testing.B) {
 	}
 }
 
-func BenchmarkLimitedBatchSmallRun(b *testing.B) {
+func BenchmarkUnlimitedBatchSmallRun(b *testing.B) {
 
-	fn := func(WorkUnit) (interface{}, error) {
-		time.Sleep(time.Second * 1)
+	fn := func(wu WorkUnit) (interface{}, error) {
+		time.Sleep(time.Millisecond * 500)
+		if wu.IsCancelled() {
+			return nil, nil
+		}
+		time.Sleep(time.Millisecond * 500)
 		return 1, nil
 	}
 
-	pool := NewLimited(10)
+	pool := New()
 	defer pool.Close()
 
 	batch := pool.Batch()

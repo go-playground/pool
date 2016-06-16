@@ -2,10 +2,10 @@ Package pool
 ============
 
 ![Project status](https://img.shields.io/badge/version-3.0.0-green.svg)
-[![Build Status](https://semaphoreci.com/api/v1/joeybloggs/pool/branches/v2/badge.svg)](https://semaphoreci.com/joeybloggs/pool)
-[![Coverage Status](https://coveralls.io/repos/go-playground/pool/badge.svg?branch=v2&service=github)](https://coveralls.io/github/go-playground/pool?branch=v2)
-[![Go Report Card](https://goreportcard.com/badge/gopkg.in/go-playground/pool.v2)](https://goreportcard.com/report/gopkg.in/go-playground/pool.v2)
-[![GoDoc](https://godoc.org/gopkg.in/go-playground/pool.v2?status.svg)](https://godoc.org/gopkg.in/go-playground/pool.v2)
+[![Build Status](https://semaphoreci.com/api/v1/joeybloggs/pool/branches/v3/badge.svg)](https://semaphoreci.com/joeybloggs/pool)
+[![Coverage Status](https://coveralls.io/repos/go-playground/pool/badge.svg?branch=v3&service=github)](https://coveralls.io/github/go-playground/pool?branch=v3)
+[![Go Report Card](https://goreportcard.com/badge/gopkg.in/go-playground/pool.v3)](https://goreportcard.com/report/gopkg.in/go-playground/pool.v3)
+[![GoDoc](https://godoc.org/gopkg.in/go-playground/pool.v3?status.svg)](https://godoc.org/gopkg.in/go-playground/pool.v3)
 ![License](https://img.shields.io/dub/l/vibe-d.svg)
 
 Package pool implements a consumer goroutine pool for easier goroutine handling. 
@@ -26,16 +26,22 @@ Pool v2 advantages over Pool v1:
 - Multiple Batches can be run and even cancelled on the same Pool.
 - Supports individual Work Unit cancellation.
 
+Pool v3 advantages over Pool v2:
+
+- Objects are not interfaces allowing for less breaking changes going forward.
+- Now there are 2 Pool types, both completely interchangeable, a limited worker pool and unlimited pool.
+- Simpler usage of Work Units, instead of `<-work.Done` now can do `work.Wait()`
+
 Installation
 ------------
 
 Use go get.
 
-	go get gopkg.in/go-playground/pool.v2
+	go get gopkg.in/go-playground/pool.v3
 
 Then import the pool package into your own code.
 
-	import "gopkg.in/go-playground/pool.v2"
+	import "gopkg.in/go-playground/pool.v3"
 
 
 Important Information READ THIS!
@@ -43,13 +49,16 @@ Important Information READ THIS!
 
 - It is recommended that you cancel a pool or batch from the calling function and not inside of the Unit of Work, it will work fine, however because of the goroutine scheduler and context switching it may not cancel as soon as if called from outside.
 - When Batching DO NOT FORGET TO CALL batch.QueueComplete(), if you do the Batch WILL deadlock
+- It is your responsibility to call WorkUnit.IsCancelled() to check if it's cancelled after a blocking operation like waiting for a connection from a pool.
 
 Usage and documentation
 ------
 
-Please see http://godoc.org/gopkg.in/go-playground/pool.v2 for detailed usage docs.
+Please see http://godoc.org/gopkg.in/go-playground/pool.v3 for detailed usage docs.
 
 ##### Examples:
+
+both Limited Pool and Unlimited Pool have the same signatures and are completely interchangeable.
 
 Per Unit Work
 ```go
@@ -59,47 +68,70 @@ import (
 	"fmt"
 	"time"
 
-	"gopkg.in/go-playground/pool.v2"
+	"gopkg.in/go-playground/pool.v3"
 )
 
 func main() {
 
-	p := pool.New(10)
+	p := pool.NewLimited(10)
 	defer p.Close()
 
 	user := p.Queue(getUser(13))
 	other := p.Queue(getOtherInfo(13))
 
-	<-user.Done
-
-	if user.Error != nil {
+	user.Wait()
+	if err := user.Error(); err != nil {
 		// handle error
 	}
 
 	// do stuff with user
-	username := user.Value.(string)
+	username := user.Value().(string)
 	fmt.Println(username)
 
-	<-other.Done
-	if other.Error != nil {
+	other.Wait()
+	if err := other.Error(); err != nil {
 		// handle error
 	}
 
 	// do stuff with other
-	otherInfo := other.Value.(string)
+	otherInfo := other.Value().(string)
 	fmt.Println(otherInfo)
 }
 
 func getUser(id int) pool.WorkFunc {
-	return func() (interface{}, error) {
+
+	return func(wu pool.WorkUnit) (interface{}, error) {
+
+		// simulate waiting for something, like TCP connection to be established
+		// or connection from pool grabbed
 		time.Sleep(time.Second * 1)
+
+		if wu.IsCancelled() {
+			// return values not used
+			return nil, nil
+		}
+
+		// ready for processing...
+
 		return "Joeybloggs", nil
 	}
 }
 
 func getOtherInfo(id int) pool.WorkFunc {
-	return func() (interface{}, error) {
+
+	return func(wu pool.WorkUnit) (interface{}, error) {
+
+		// simulate waiting for something, like TCP connection to be established
+		// or connection from pool grabbed
 		time.Sleep(time.Second * 1)
+
+		if wu.IsCancelled() {
+			// return values not used
+			return nil, nil
+		}
+
+		// ready for processing...
+
 		return "Other Info", nil
 	}
 }
@@ -110,14 +142,15 @@ Batch Work
 package main
 
 import (
+	"fmt"
 	"time"
 
-	"gopkg.in/go-playground/pool.v2"
+	"gopkg.in/go-playground/pool.v3"
 )
 
 func main() {
 
-	p := pool.New(10)
+	p := pool.NewLimited(10)
 	defer p.Close()
 
 	batch := p.Batch()
@@ -138,17 +171,31 @@ func main() {
 
 	for email := range batch.Results() {
 
-		if email.Error != nil {
+		if err := email.Error(); err != nil {
 			// handle error
 			// maybe call batch.Cancel()
 		}
+
+		// use return value
+		fmt.Println(email.Value().(bool))
 	}
 }
 
 func sendEmail(email string) pool.WorkFunc {
-	return func() (interface{}, error) {
+	return func(wu pool.WorkUnit) (interface{}, error) {
+
+		// simulate waiting for something, like TCP connection to be established
+		// or connection from pool grabbed
 		time.Sleep(time.Second * 1)
-		return nil, nil // everything ok, send nil, error if not
+
+		if wu.IsCancelled() {
+			// return values not used
+			return nil, nil
+		}
+
+		// ready for processing...
+
+		return true, nil // everything ok, send nil, error if not
 	}
 }
 ```
@@ -165,38 +212,63 @@ worse case I've seen is 1s to cancel instead of 0ns
 ```go
 go test -cpu=1,2,4,8,16 -bench=. -benchmem=true
 PASS
-BenchmarkSmallRun              	       1	1000272161 ns/op	    3376 B/op	      52 allocs/op
-BenchmarkSmallRun-2            	       1	1000189853 ns/op	    3760 B/op	      59 allocs/op
-BenchmarkSmallRun-4            	       1	1000124654 ns/op	    3584 B/op	      56 allocs/op
-BenchmarkSmallRun-8            	       1	1000379019 ns/op	    5248 B/op	      82 allocs/op
-BenchmarkSmallRun-16           	       1	1001142392 ns/op	    2944 B/op	      46 allocs/op
-BenchmarkSmallCancel           	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
-BenchmarkSmallCancel-2         	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
-BenchmarkSmallCancel-4         	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
-BenchmarkSmallCancel-8         	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
-BenchmarkSmallCancel-16        	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
-BenchmarkLargeCancel           	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
-BenchmarkLargeCancel-2         	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
-BenchmarkLargeCancel-4         	2000000000	         0.50 ns/op	       0 B/op	       0 allocs/op
-BenchmarkLargeCancel-8         	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
-BenchmarkLargeCancel-16        	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
-BenchmarkOverconsumeLargeRun   	       1	4004583134 ns/op	   28192 B/op	     445 allocs/op
-BenchmarkOverconsumeLargeRun-2 	       1	4002687537 ns/op	   25712 B/op	     409 allocs/op
-BenchmarkOverconsumeLargeRun-4 	       1	4002607357 ns/op	   28592 B/op	     454 allocs/op
-BenchmarkOverconsumeLargeRun-8 	       1	4002735501 ns/op	   28352 B/op	     450 allocs/op
-BenchmarkOverconsumeLargeRun-16	       1	4003054866 ns/op	   31536 B/op	     475 allocs/op
-BenchmarkBatchSmallRun         	       1	1000508259 ns/op	    3584 B/op	      56 allocs/op
-BenchmarkBatchSmallRun-2       	       1	1000130730 ns/op	    3520 B/op	      55 allocs/op
-BenchmarkBatchSmallRun-4       	       1	1000202619 ns/op	    3840 B/op	      60 allocs/op
-BenchmarkBatchSmallRun-8       	       1	1000520606 ns/op	    4448 B/op	      69 allocs/op
-BenchmarkBatchSmallRun-16      	       1	1000207225 ns/op	    3792 B/op	      59 allocs/op
+BenchmarkLimitedSmallRun              	       1	1002492008 ns/op	    3552 B/op	      55 allocs/op
+BenchmarkLimitedSmallRun-2            	       1	1002347196 ns/op	    3568 B/op	      55 allocs/op
+BenchmarkLimitedSmallRun-4            	       1	1010533571 ns/op	    4720 B/op	      73 allocs/op
+BenchmarkLimitedSmallRun-8            	       1	1008883324 ns/op	    4080 B/op	      63 allocs/op
+BenchmarkLimitedSmallRun-16           	       1	1002317677 ns/op	    3632 B/op	      56 allocs/op
+BenchmarkLimitedSmallCancel           	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLimitedSmallCancel-2         	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLimitedSmallCancel-4         	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLimitedSmallCancel-8         	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLimitedSmallCancel-16        	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLimitedLargeCancel           	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLimitedLargeCancel-2         	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLimitedLargeCancel-4         	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLimitedLargeCancel-8         	 1000000	      1006 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLimitedLargeCancel-16        	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLimitedOverconsumeLargeRun   	       1	4027153081 ns/op	   36176 B/op	     572 allocs/op
+BenchmarkLimitedOverconsumeLargeRun-2 	       1	4003489261 ns/op	   32336 B/op	     512 allocs/op
+BenchmarkLimitedOverconsumeLargeRun-4 	       1	4005579847 ns/op	   34128 B/op	     540 allocs/op
+BenchmarkLimitedOverconsumeLargeRun-8 	       1	4004639857 ns/op	   34992 B/op	     553 allocs/op
+BenchmarkLimitedOverconsumeLargeRun-16	       1	4022695297 ns/op	   36864 B/op	     532 allocs/op
+BenchmarkLimitedBatchSmallRun         	       1	1000785511 ns/op	    6336 B/op	      94 allocs/op
+BenchmarkLimitedBatchSmallRun-2       	       1	1001459945 ns/op	    4480 B/op	      65 allocs/op
+BenchmarkLimitedBatchSmallRun-4       	       1	1002475371 ns/op	    6672 B/op	      99 allocs/op
+BenchmarkLimitedBatchSmallRun-8       	       1	1002498902 ns/op	    4624 B/op	      67 allocs/op
+BenchmarkLimitedBatchSmallRun-16      	       1	1002202273 ns/op	    5344 B/op	      78 allocs/op
+BenchmarkUnlimitedSmallRun            	       1	1002361538 ns/op	    3696 B/op	      59 allocs/op
+BenchmarkUnlimitedSmallRun-2          	       1	1002230293 ns/op	    3776 B/op	      60 allocs/op
+BenchmarkUnlimitedSmallRun-4          	       1	1002148953 ns/op	    3776 B/op	      60 allocs/op
+BenchmarkUnlimitedSmallRun-8          	       1	1002120679 ns/op	    3584 B/op	      57 allocs/op
+BenchmarkUnlimitedSmallRun-16         	       1	1001698519 ns/op	    3968 B/op	      63 allocs/op
+BenchmarkUnlimitedSmallCancel         	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUnlimitedSmallCancel-2       	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUnlimitedSmallCancel-4       	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUnlimitedSmallCancel-8       	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUnlimitedSmallCancel-16      	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUnlimitedLargeCancel         	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUnlimitedLargeCancel-2       	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUnlimitedLargeCancel-4       	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUnlimitedLargeCancel-8       	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUnlimitedLargeCancel-16      	2000000000	         0.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUnlimitedLargeRun            	       1	1001631711 ns/op	   40352 B/op	     603 allocs/op
+BenchmarkUnlimitedLargeRun-2          	       1	1002603908 ns/op	   38304 B/op	     586 allocs/op
+BenchmarkUnlimitedLargeRun-4          	       1	1001452975 ns/op	   38192 B/op	     584 allocs/op
+BenchmarkUnlimitedLargeRun-8          	       1	1005382882 ns/op	   35200 B/op	     537 allocs/op
+BenchmarkUnlimitedLargeRun-16         	       1	1001818482 ns/op	   37056 B/op	     566 allocs/op
+BenchmarkUnlimitedBatchSmallRun       	       1	1002391247 ns/op	    4240 B/op	      63 allocs/op
+BenchmarkUnlimitedBatchSmallRun-2     	       1	1010313222 ns/op	    4688 B/op	      70 allocs/op
+BenchmarkUnlimitedBatchSmallRun-4     	       1	1008364651 ns/op	    4304 B/op	      64 allocs/op
+BenchmarkUnlimitedBatchSmallRun-8     	       1	1001858192 ns/op	    4448 B/op	      66 allocs/op
+BenchmarkUnlimitedBatchSmallRun-16    	       1	1001228000 ns/op	    4320 B/op	      64 allocs/op
 ```
-To put these benchmarks in perspective:
+To put some of these benchmarks in perspective:
 
-- BenchmarkSmallRun did 10 seconds worth of processing in 1.000272161s
-- BenchmarkSmallCancel ran 20 jobs, cancelled on job 6 and and ran in 0s
-- BenchmarkLargeCancel ran 1000 jobs, cancelled on job 6 and and ran in 0s
-- BenchmarkOverconsumeLargeRun ran 100 jobs using 25 workers in 4.004583134s
+- BenchmarkLimitedSmallRun did 10 seconds worth of processing in 1.002492008s
+- BenchmarkLimitedSmallCancel ran 20 jobs, cancelled on job 6 and and ran in 0s
+- BenchmarkLimitedLargeCancel ran 1000 jobs, cancelled on job 6 and and ran in 0s
+- BenchmarkLimitedOverconsumeLargeRun ran 100 jobs using 25 workers in 4.027153081s
 
 
 License

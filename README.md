@@ -10,6 +10,8 @@ Package pool
 
 Package pool implements a consumer goroutine pool for easier goroutine handling. 
 
+NOTE: v3 is underway with even more goodies.
+
 Features:
 
 -    Dead simple to use and makes no assumptions about how you will use it.

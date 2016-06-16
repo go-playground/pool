@@ -4,9 +4,23 @@ import "sync"
 
 // Batch contains all information for a batch run of WorkUnits
 type Batch interface {
+
+	// Queue queues the work to be run in the pool and starts processing immediately
+	// and also retains a reference for Cancellation and outputting to results.
+	// WARNING be sure to call QueueComplete() once all work has been Queued.
 	Queue(fn WorkFunc)
+
+	// QueueComplete lets the batch know that there will be no more Work Units Queued
+	// so that it may close the results channels once all work is completed.
+	// WARNING: if this function is not called the results channel will never exhaust,
+	// but block forever listening for more results.
 	QueueComplete()
+
+	// Cancel cancels the Work Units belonging to this Batch
 	Cancel()
+
+	// Results returns a Work Unit result channel that will output all
+	// completed units of work.
 	Results() <-chan WorkUnit
 }
 
@@ -67,7 +81,7 @@ func (b *batch) QueueComplete() {
 	b.m.Unlock()
 }
 
-// Cancel cancells the Work Units belonging to this Batch
+// Cancel cancels the Work Units belonging to this Batch
 func (b *batch) Cancel() {
 
 	b.QueueComplete() // no more to be added

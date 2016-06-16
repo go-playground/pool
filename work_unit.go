@@ -4,10 +4,22 @@ import "sync/atomic"
 
 // WorkUnit contains a single uint of works values
 type WorkUnit interface {
+
+	// Wait blocks until WorkUnit has been processed or cancelled
 	Wait()
+
+	// Value returns the work units return value
 	Value() interface{}
+
+	// Error returns the Work Unit's error
 	Error() error
+
+	// Cancel cancels this specific unit of work, if not already commited to processing.
 	Cancel()
+
+	// IsCancelled returns if the Work Unit has been cancelled.
+	// NOTE: After Checking IsCancelled(), if it returns false the
+	// Work Unit can no longer be cancelled and will use your returned values.
 	IsCancelled() bool
 }
 
@@ -23,7 +35,7 @@ type workUnit struct {
 	writing   atomic.Value
 }
 
-// Cancel cancels this specific unit of work.
+// Cancel cancels this specific unit of work, if not already commited to processing.
 func (wu *workUnit) Cancel() {
 	wu.cancelWithError(&ErrCancelled{s: errCancelled})
 }

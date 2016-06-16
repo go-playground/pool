@@ -18,16 +18,16 @@ import (
 // go test -coverprofile cover.out && go tool cover -html=cover.out -o cover.html
 //
 
-func TestBatch(t *testing.T) {
+func TestLimitedBatch(t *testing.T) {
 
-	newFunc := func(i int) func() (interface{}, error) {
-		return func() (interface{}, error) {
+	newFunc := func(i int) func(WorkUnit) (interface{}, error) {
+		return func(WorkUnit) (interface{}, error) {
 			time.Sleep(time.Second * 1)
 			return i, nil
 		}
 	}
 
-	pool := New(4)
+	pool := NewLimited(4)
 	defer pool.Close()
 
 	batch := pool.Batch()
@@ -47,16 +47,16 @@ func TestBatch(t *testing.T) {
 	Equal(t, count, 4)
 }
 
-func TestBatchGlobalPool(t *testing.T) {
+func TestLimitedBatchGlobalPool(t *testing.T) {
 
-	newFunc := func(i int) func() (interface{}, error) {
-		return func() (interface{}, error) {
+	newFunc := func(i int) func(WorkUnit) (interface{}, error) {
+		return func(WorkUnit) (interface{}, error) {
 			time.Sleep(time.Second * 1)
 			return i, nil
 		}
 	}
 
-	batch := gpool.Batch()
+	batch := limitedGpool.Batch()
 
 	for i := 0; i < 4; i++ {
 		batch.Queue(newFunc(i))
@@ -73,16 +73,16 @@ func TestBatchGlobalPool(t *testing.T) {
 	Equal(t, count, 4)
 }
 
-func TestBatchCancelItemsThrownAway(t *testing.T) {
+func TestLimitedBatchCancelItemsThrownAway(t *testing.T) {
 
-	newFunc := func(i int) func() (interface{}, error) {
-		return func() (interface{}, error) {
+	newFunc := func(i int) func(WorkUnit) (interface{}, error) {
+		return func(WorkUnit) (interface{}, error) {
 			time.Sleep(time.Second * 1)
 			return i, nil
 		}
 	}
 
-	pool := New(4)
+	pool := NewLimited(4)
 	defer pool.Close()
 
 	batch := pool.Batch()
@@ -104,16 +104,16 @@ func TestBatchCancelItemsThrownAway(t *testing.T) {
 	NotEqual(t, count, 40)
 }
 
-func TestBatchCancelItemsCancelledAfterward(t *testing.T) {
+func TestLimitedBatchCancelItemsCancelledAfterward(t *testing.T) {
 
-	newFunc := func(i int) func() (interface{}, error) {
-		return func() (interface{}, error) {
+	newFunc := func(i int) func(WorkUnit) (interface{}, error) {
+		return func(WorkUnit) (interface{}, error) {
 			time.Sleep(time.Second * 1)
 			return i, nil
 		}
 	}
 
-	pool := New(4)
+	pool := NewLimited(4)
 	defer pool.Close()
 
 	batch := pool.Batch()

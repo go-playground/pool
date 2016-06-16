@@ -5,16 +5,16 @@ import (
 	"time"
 )
 
-func BenchmarkSmallRun(b *testing.B) {
+func BenchmarkLimitedSmallRun(b *testing.B) {
 
-	res := make([]*WorkUnit, 10)
+	res := make([]WorkUnit, 10)
 
 	b.ReportAllocs()
 
-	pool := New(10)
+	pool := NewLimited(10)
 	defer pool.Close()
 
-	fn := func() (interface{}, error) {
+	fn := func(WorkUnit) (interface{}, error) {
 		time.Sleep(time.Second * 1)
 		return 1, nil
 	}
@@ -27,10 +27,10 @@ func BenchmarkSmallRun(b *testing.B) {
 
 	for _, cw := range res {
 
-		<-cw.Done
+		cw.Wait()
 
-		if cw.Error == nil {
-			count += cw.Value.(int)
+		if cw.Error() == nil {
+			count += cw.Value().(int)
 		}
 	}
 
@@ -39,17 +39,17 @@ func BenchmarkSmallRun(b *testing.B) {
 	}
 }
 
-func BenchmarkSmallCancel(b *testing.B) {
+func BenchmarkLimitedSmallCancel(b *testing.B) {
 
-	res := make([]*WorkUnit, 0, 20)
+	res := make([]WorkUnit, 0, 20)
 
 	b.ReportAllocs()
 
-	pool := New(4)
+	pool := NewLimited(4)
 	defer pool.Close()
 
-	newFunc := func(i int) func() (interface{}, error) {
-		return func() (interface{}, error) {
+	newFunc := func(i int) WorkFunc {
+		return func(WorkUnit) (interface{}, error) {
 			time.Sleep(time.Second * 1)
 			return i, nil
 		}
@@ -66,21 +66,21 @@ func BenchmarkSmallCancel(b *testing.B) {
 		if wrk == nil {
 			continue
 		}
-		<-wrk.Done
+		wrk.Wait()
 	}
 }
 
-func BenchmarkLargeCancel(b *testing.B) {
+func BenchmarkLimitedLargeCancel(b *testing.B) {
 
-	res := make([]*WorkUnit, 0, 1000)
+	res := make([]WorkUnit, 0, 1000)
 
 	b.ReportAllocs()
 
-	pool := New(4)
+	pool := NewLimited(4)
 	defer pool.Close()
 
-	newFunc := func(i int) func() (interface{}, error) {
-		return func() (interface{}, error) {
+	newFunc := func(i int) WorkFunc {
+		return func(WorkUnit) (interface{}, error) {
 			time.Sleep(time.Second * 1)
 			return i, nil
 		}
@@ -97,21 +97,21 @@ func BenchmarkLargeCancel(b *testing.B) {
 		if wrk == nil {
 			continue
 		}
-		<-wrk.Done
+		wrk.Wait()
 	}
 }
 
-func BenchmarkOverconsumeLargeRun(b *testing.B) {
+func BenchmarkLimitedOverconsumeLargeRun(b *testing.B) {
 
-	res := make([]*WorkUnit, 100)
+	res := make([]WorkUnit, 100)
 
 	b.ReportAllocs()
 
-	pool := New(25)
+	pool := NewLimited(25)
 	defer pool.Close()
 
-	newFunc := func(i int) func() (interface{}, error) {
-		return func() (interface{}, error) {
+	newFunc := func(i int) WorkFunc {
+		return func(WorkUnit) (interface{}, error) {
 			time.Sleep(time.Second * 1)
 			return 1, nil
 		}
@@ -125,9 +125,9 @@ func BenchmarkOverconsumeLargeRun(b *testing.B) {
 
 	for _, cw := range res {
 
-		<-cw.Done
+		cw.Wait()
 
-		count += cw.Value.(int)
+		count += cw.Value().(int)
 	}
 
 	if count != 100 {
@@ -135,14 +135,14 @@ func BenchmarkOverconsumeLargeRun(b *testing.B) {
 	}
 }
 
-func BenchmarkBatchSmallRun(b *testing.B) {
+func BenchmarkLimitedBatchSmallRun(b *testing.B) {
 
-	fn := func() (interface{}, error) {
+	fn := func(WorkUnit) (interface{}, error) {
 		time.Sleep(time.Second * 1)
 		return 1, nil
 	}
 
-	pool := New(10)
+	pool := NewLimited(10)
 	defer pool.Close()
 
 	batch := pool.Batch()
@@ -156,7 +156,7 @@ func BenchmarkBatchSmallRun(b *testing.B) {
 	var count int
 
 	for cw := range batch.Results() {
-		count += cw.Value.(int)
+		count += cw.Value().(int)
 	}
 
 	if count != 10 {

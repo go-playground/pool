@@ -73,12 +73,9 @@ func TestUnlimitedCancel(t *testing.T) {
 
 			go func(ch chan WorkUnit) {
 				m.RLock()
-				if closed {
-					m.RUnlock()
-					return
+				if !closed {
+					ch <- pool.Queue(newFunc(time.Second * 1))
 				}
-
-				ch <- pool.Queue(newFunc(time.Second * 1))
 				m.RUnlock()
 			}(ch)
 		}

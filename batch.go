@@ -22,6 +22,13 @@ type Batch interface {
 	// Results returns a Work Unit result channel that will output all
 	// completed units of work.
 	Results() <-chan WorkUnit
+
+	// WaitAll is an alternative to Results() where you
+	// may want/need to wait until all work has been
+	// processed, but don't need to check results.
+	// eg. individual units of work may handle their own
+	// errors, logging...
+	WaitAll()
 }
 
 // batch contains all information for a batch run of WorkUnits
@@ -110,4 +117,15 @@ func (b *batch) Results() <-chan WorkUnit {
 	}(b)
 
 	return b.results
+}
+
+// WaitAll is an alternative to Results() where you
+// may want/need to wait until all work has been
+// processed, but don't need to check results.
+// eg. individual units of work may handle their own
+// errors and logging...
+func (b *batch) WaitAll() {
+
+	for range b.Results() {
+	}
 }

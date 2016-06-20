@@ -1,7 +1,7 @@
 Package pool
 ============
 
-![Project status](https://img.shields.io/badge/version-3.0.0-green.svg)
+![Project status](https://img.shields.io/badge/version-3.1.0-green.svg)
 [![Build Status](https://semaphoreci.com/api/v1/joeybloggs/pool/branches/v3/badge.svg)](https://semaphoreci.com/joeybloggs/pool)
 [![Coverage Status](https://coveralls.io/repos/go-playground/pool/badge.svg?branch=v3&service=github)](https://coveralls.io/github/go-playground/pool?branch=v3)
 [![Go Report Card](https://goreportcard.com/badge/gopkg.in/go-playground/pool.v3)](https://goreportcard.com/report/gopkg.in/go-playground/pool.v3)
@@ -49,7 +49,7 @@ Important Information READ THIS!
 
 - It is recommended that you cancel a pool or batch from the calling function and not inside of the Unit of Work, it will work fine, however because of the goroutine scheduler and context switching it may not cancel as soon as if called from outside.
 - When Batching DO NOT FORGET TO CALL batch.QueueComplete(), if you do the Batch WILL deadlock
-- It is your responsibility to call WorkUnit.IsCancelled() to check if it's cancelled after a blocking operation like waiting for a connection from a pool.
+- It is your responsibility to call WorkUnit.IsCancelled() to check if it's cancelled after a blocking operation like waiting for a connection from a pool. (optional)
 
 Usage and documentation
 ------

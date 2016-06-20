@@ -41,7 +41,7 @@ important usage information
       if you do the Batch WILL deadlock
 
     - It is your responsibility to call WorkUnit.IsCancelled() to check if it's cancelled
-      after a blocking operation like waiting for a connection from a pool.
+      after a blocking operation like waiting for a connection from a pool. (optional)
 
 
 Usage and documentation

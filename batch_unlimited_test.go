@@ -1,6 +1,7 @@
 package pool
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -134,4 +135,38 @@ func TestUnlimitedBatchCancelItemsCancelledAfterward(t *testing.T) {
 	}
 
 	Equal(t, count, 40)
+}
+
+func TestUnlimitedBatchWaitAll(t *testing.T) {
+
+	var count int
+	var m sync.Mutex
+
+	newFunc := func(i int) func(WorkUnit) (interface{}, error) {
+		return func(WorkUnit) (interface{}, error) {
+			time.Sleep(time.Second * 1)
+			m.Lock()
+			count++
+			m.Unlock()
+			return i, nil
+		}
+	}
+
+	pool := New()
+	defer pool.Close()
+
+	batch := pool.Batch()
+
+	go func() {
+
+		for i := 0; i < 10; i++ {
+			batch.Queue(newFunc(i))
+		}
+
+		batch.QueueComplete()
+	}()
+
+	batch.WaitAll()
+
+	Equal(t, count, 10)
 }

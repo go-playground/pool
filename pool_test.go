@@ -168,3 +168,35 @@ func TestPanicRecovery(t *testing.T) {
 
 	Equal(t, count, 1)
 }
+
+func TestPanicTwice(t *testing.T) {
+	pool := NewPool(2, 4)
+
+	fn := func(job *Job) {
+		// ensure all jobs running and then they can panic twice
+		time.Sleep(time.Second * 1)
+
+		i := job.Params()[0].(int)
+		if i == 2 || i == 3 {
+			panic("OMG OMG OMG! something bad happened!")
+		}
+		job.Return(i)
+	}
+
+	for i := 0; i < 4; i++ {
+		time.Sleep(200 * time.Millisecond)
+		pool.Queue(fn, i)
+	}
+
+	var count int
+
+	for result := range pool.Results() {
+		err, ok := result.(*ErrRecovery)
+		if ok {
+			count++
+			NotEqual(t, len(err.Error()), 0)
+		}
+	}
+
+	Equal(t, count, 2)
+}

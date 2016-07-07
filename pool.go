@@ -164,8 +164,12 @@ func (p *Pool) Queue(fn JobFunc, params ...interface{}) {
 // Cancel cancels all jobs not already running.
 // It can also be called from within a job through the Job object
 func (p *Pool) Cancel() {
-	close(p.cancel)
 	p.cancelLock.Lock()
+	if p.cancelled {
+		p.cancelLock.Unlock()
+		return
+	}
+	close(p.cancel)
 	p.cancelled = true
 	p.cancelLock.Unlock()
 	p.cancelJobs()

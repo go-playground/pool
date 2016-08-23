@@ -92,7 +92,7 @@ func (p *limitedPool) newWorker(work chan *workUnit, cancel chan struct{}) {
 
 					// need to check again in case the WorkFunc cancelled this unit of work
 					// otherwise we'll have a race condition
-					if wu.cancelled.Load() == nil {
+					if wu.cancelled.Load() == nil && wu.cancelling.Load() == nil {
 						wu.value, wu.err = value, err
 
 						// who knows where the Done channel is being listened to on the other end

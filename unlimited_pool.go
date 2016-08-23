@@ -79,7 +79,7 @@ func (p *unlimitedPool) Queue(fn WorkFunc) WorkUnit {
 
 			// need to check again in case the WorkFunc cancelled this unit of work
 			// otherwise we'll have a race condition
-			if w.cancelled.Load() == nil {
+			if w.cancelled.Load() == nil && w.cancelling.Load() == nil {
 
 				w.value, w.err = val, err
 

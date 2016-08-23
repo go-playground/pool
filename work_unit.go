@@ -28,12 +28,13 @@ var _ WorkUnit = new(workUnit)
 
 // workUnit contains a single unit of works values
 type workUnit struct {
-	value     interface{}
-	err       error
-	done      chan struct{}
-	fn        WorkFunc
-	cancelled atomic.Value
-	writing   atomic.Value
+	value      interface{}
+	err        error
+	done       chan struct{}
+	fn         WorkFunc
+	cancelled  atomic.Value
+	cancelling atomic.Value
+	writing    atomic.Value
 }
 
 // Cancel cancels this specific unit of work, if not already committed to processing.
@@ -42,6 +43,9 @@ func (wu *workUnit) Cancel() {
 }
 
 func (wu *workUnit) cancelWithError(err error) {
+
+	wu.cancelling.Store(struct{}{})
+
 	if wu.writing.Load() == nil && wu.cancelled.Load() == nil {
 		wu.cancelled.Store(struct{}{})
 		wu.err = err

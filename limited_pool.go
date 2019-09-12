@@ -88,6 +88,7 @@ func (p *limitedPool) newWorker(work chan *workUnit, cancel chan struct{}) {
 				if wu.cancelled.Load() == nil {
 					value, err = wu.fn(wu)
 
+					wu.Lock()
 					wu.writing.Store(struct{}{})
 
 					// need to check again in case the WorkFunc cancelled this unit of work
@@ -100,6 +101,7 @@ func (p *limitedPool) newWorker(work chan *workUnit, cancel chan struct{}) {
 						// of work to be done first so we use close
 						close(wu.done)
 					}
+					wu.Unlock()
 				}
 
 			case <-cancel:

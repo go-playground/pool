@@ -75,6 +75,7 @@ func (p *unlimitedPool) Queue(fn WorkFunc) WorkUnit {
 		if w.cancelled.Load() == nil {
 			val, err := w.fn(w)
 
+			w.Lock()
 			w.writing.Store(struct{}{})
 
 			// need to check again in case the WorkFunc cancelled this unit of work
@@ -88,6 +89,7 @@ func (p *unlimitedPool) Queue(fn WorkFunc) WorkUnit {
 				// of work to be done first so we use close
 				close(w.done)
 			}
+			w.Unlock()
 		}
 	}(w)
 

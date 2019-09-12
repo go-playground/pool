@@ -1,6 +1,9 @@
 package pool
 
-import "sync/atomic"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 // WorkUnit contains a single uint of works values
 type WorkUnit interface {
@@ -35,6 +38,7 @@ type workUnit struct {
 	cancelled  atomic.Value
 	cancelling atomic.Value
 	writing    atomic.Value
+	sync.Mutex
 }
 
 // Cancel cancels this specific unit of work, if not already committed to processing.
@@ -44,6 +48,8 @@ func (wu *workUnit) Cancel() {
 
 func (wu *workUnit) cancelWithError(err error) {
 
+	wu.Lock()
+	defer wu.Unlock()
 	wu.cancelling.Store(struct{}{})
 
 	if wu.writing.Load() == nil && wu.cancelled.Load() == nil {

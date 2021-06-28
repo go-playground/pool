@@ -78,7 +78,7 @@ func (p *limitedPool) newWorker(work chan *workUnit, cancel chan struct{}) {
 			case wu = <-work:
 
 				// possible for one more nilled out value to make it
-				// through when channel closed, don't quite understad the why
+				// through when channel closed, don't quite understand the why
 				if wu == nil {
 					continue
 				}
